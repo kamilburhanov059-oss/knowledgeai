@@ -1,0 +1,119 @@
+{
+  "name": "KAI - Process Document",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "kai-process-document",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "bb000002-0000-0000-0000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "webhookId": "kai-process-document"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\nconst text = (body.content || '').trim();\nconst document_id = body.document_id;\nconst collection_id = body.collection_id;\n\nconst CHUNK_SIZE = 1500;\nconst OVERLAP = 150;\nconst chunks = [];\n\nlet start = 0;\nlet index = 0;\n\nwhile (start < text.length) {\n  const end = Math.min(start + CHUNK_SIZE, text.length);\n  const content = text.slice(start, end).trim();\n  if (content.length > 30) {\n    chunks.push({ json: { content, document_id, collection_id, chunk_index: index++ } });\n  }\n  start += CHUNK_SIZE - OVERLAP;\n}\n\nif (chunks.length === 0) {\n  chunks.push({ json: { content: text || 'empty', document_id, collection_id, chunk_index: 0 } });\n}\n\nreturn chunks;"
+      },
+      "id": "bb000002-0000-0000-0000-000000000002",
+      "name": "Split Chunks",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/embeddings",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer YOUR_OPENAI_KEY" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ input: $json.content, model: 'text-embedding-ada-002' }) }}",
+        "options": {}
+      },
+      "id": "bb000002-0000-0000-0000-000000000003",
+      "name": "Get Embedding",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [640, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_SUPABASE_URL/rest/v1/kai_chunks",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "YOUR_SUPABASE_ANON_KEY" },
+            { "name": "Authorization", "value": "Bearer YOUR_SUPABASE_ANON_KEY" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=minimal" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ document_id: $('Split Chunks').item.json.document_id, collection_id: $('Split Chunks').item.json.collection_id, content: $('Split Chunks').item.json.content, embedding: $json.data[0].embedding, chunk_index: $('Split Chunks').item.json.chunk_index }) }}",
+        "options": {}
+      },
+      "id": "bb000002-0000-0000-0000-000000000004",
+      "name": "Save Chunk",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [860, 300]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://YOUR_SUPABASE_URL/rest/v1/kai_documents?id=eq.{{ $('Split Chunks').item.json.document_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "YOUR_SUPABASE_ANON_KEY" },
+            { "name": "Authorization", "value": "Bearer YOUR_SUPABASE_ANON_KEY" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=minimal" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"status\": \"ready\"}",
+        "options": {}
+      },
+      "id": "bb000002-0000-0000-0000-000000000005",
+      "name": "Mark Ready",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1080, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"success\": true, \"message\": \"Document processed\"}"
+      },
+      "id": "bb000002-0000-0000-0000-000000000006",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1300, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Split Chunks", "type": "main", "index": 0 }]] },
+    "Split Chunks": { "main": [[{ "node": "Get Embedding", "type": "main", "index": 0 }]] },
+    "Get Embedding": { "main": [[{ "node": "Save Chunk", "type": "main", "index": 0 }]] },
+    "Save Chunk": { "main": [[{ "node": "Mark Ready", "type": "main", "index": 0 }]] },
+    "Mark Ready": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" }
+}

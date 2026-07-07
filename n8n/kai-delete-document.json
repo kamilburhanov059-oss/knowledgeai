@@ -1,0 +1,77 @@
+{
+  "name": "KAI - Delete Document",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "kai-delete-document",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "cc000003-0000-0000-0000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "webhookId": "kai-delete-document"
+    },
+    {
+      "parameters": {
+        "method": "DELETE",
+        "url": "=https://YOUR_SUPABASE_URL/rest/v1/kai_chunks?document_id=eq.{{ $json.body.document_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "YOUR_SUPABASE_ANON_KEY" },
+            { "name": "Authorization", "value": "Bearer YOUR_SUPABASE_ANON_KEY" },
+            { "name": "Prefer", "value": "return=minimal" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cc000003-0000-0000-0000-000000000002",
+      "name": "Delete Chunks",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [420, 300]
+    },
+    {
+      "parameters": {
+        "method": "DELETE",
+        "url": "=https://YOUR_SUPABASE_URL/rest/v1/kai_documents?id=eq.{{ $('Webhook').first().json.body.document_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "YOUR_SUPABASE_ANON_KEY" },
+            { "name": "Authorization", "value": "Bearer YOUR_SUPABASE_ANON_KEY" },
+            { "name": "Prefer", "value": "return=minimal" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cc000003-0000-0000-0000-000000000003",
+      "name": "Delete Document",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [640, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"success\": true}"
+      },
+      "id": "cc000003-0000-0000-0000-000000000004",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [860, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Delete Chunks", "type": "main", "index": 0 }]] },
+    "Delete Chunks": { "main": [[{ "node": "Delete Document", "type": "main", "index": 0 }]] },
+    "Delete Document": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" }
+}
