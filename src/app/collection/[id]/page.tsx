@@ -266,7 +266,8 @@ function CollectionPageInner() {
     if (error || !doc) return;
 
     // Save content directly to Supabase to avoid API body size limits
-    await supabase.from("kai_documents").update({ content }).eq("id", doc.id);
+    const { error: contentErr } = await supabase.from("kai_documents").update({ content }).eq("id", doc.id);
+    if (contentErr) console.error("Failed to save content to Supabase:", contentErr.message);
 
     setDocs((prev) => [doc, ...prev]);
     startPolling(doc.id);
@@ -284,11 +285,17 @@ function CollectionPageInner() {
         }),
       });
 
-      if (!res.ok) throw new Error("Webhook failed");
-    } catch {
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        console.error("process-document failed:", res.status, errText);
+        throw new Error(`Webhook ${res.status}: ${errText}`);
+      }
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : "Ошибка отправки в обработку";
+      console.error("handleAdd error:", errMsg);
       await supabase
         .from("kai_documents")
-        .update({ status: "error", error_message: "Ошибка отправки в обработку" })
+        .update({ status: "error", error_message: errMsg })
         .eq("id", doc.id);
       setDocs((prev) => prev.map((d) => d.id === doc.id ? { ...d, status: "error", error_message: "Ошибка отправки в обработку" } : d));
       clearInterval(pollTimers.current.get(doc.id));
