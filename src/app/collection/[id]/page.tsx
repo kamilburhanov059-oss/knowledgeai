@@ -265,6 +265,9 @@ function CollectionPageInner() {
 
     if (error || !doc) return;
 
+    // Save content directly to Supabase to avoid API body size limits
+    await supabase.from("kai_documents").update({ content }).eq("id", doc.id);
+
     setDocs((prev) => [doc, ...prev]);
     startPolling(doc.id);
 
@@ -276,7 +279,6 @@ function CollectionPageInner() {
           user_id: user.id,
           document_id: doc.id,
           collection_id: collection.id,
-          content,
           document_name: name,
           type,
         }),
