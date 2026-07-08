@@ -9,8 +9,12 @@ export async function extractText(file: File): Promise<string> {
     return extractPDF(file);
   }
 
-  if (ext === "docx" || ext === "doc") {
+  if (ext === "docx") {
     return extractDOCX(file);
+  }
+
+  if (ext === "doc") {
+    throw new Error("Формат .doc не поддерживается. Откройте файл в Word и сохраните как .docx или PDF");
   }
 
   // Fallback — try reading as plain text

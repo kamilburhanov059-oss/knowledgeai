@@ -51,7 +51,8 @@ function UploadModal({ onClose, onAdd, T, lang }: {
       await onAdd(`[${label}] ${cleanName(file.name)}`, ext, file.size, content);
       onClose();
     } catch (err) {
-      setExtractError(lang === "uz" ? "Faylni o'qishda xato" : "Ошибка при чтении файла");
+      const msg = err instanceof Error ? err.message : "";
+      setExtractError(msg || (lang === "uz" ? "Faylni o'qishda xato" : "Ошибка при чтении файла"));
       setExtracting(false);
     }
   };
