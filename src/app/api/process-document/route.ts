@@ -29,11 +29,17 @@ export async function POST(req: NextRequest) {
       req.headers.get("origin") ||
       "https://knowledgeai-seven.vercel.app";
 
-    fetch(`${origin}/api/process-chunks`, {
+    const workerRes = await fetch(`${origin}/api/process-chunks`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ document_id, collection_id, user_id, document_name }),
-    }).catch((err) => console.error("Worker spawn failed:", err));
+      signal: AbortSignal.timeout(55000),
+    });
+
+    if (!workerRes.ok) {
+      const errText = await workerRes.text().catch(() => "");
+      throw new Error(`Worker failed ${workerRes.status}: ${errText}`);
+    }
 
     return NextResponse.json({ success: true });
   } catch (err) {
