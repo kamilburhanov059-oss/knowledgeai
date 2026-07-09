@@ -1,33 +1,43 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 
 export const maxDuration = 60;
-
 export const dynamic = "force-dynamic";
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    const { document_id, collection_id, user_id, document_name } = body;
 
-    const n8nUrl = process.env.N8N_PROCESS_DOCUMENT_WEBHOOK_URL;
-    if (!n8nUrl) {
-      return NextResponse.json({ error: "N8N URL not configured" }, { status: 500 });
+    if (!document_id || !collection_id || !user_id) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    const res = await fetch(n8nUrl, {
+    // Mark as processing
+    const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+    await admin
+      .from("kai_documents")
+      .update({ status: "processing" })
+      .eq("id", document_id);
+
+    // Fire and forget — spawn independent worker function
+    const origin =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      req.headers.get("origin") ||
+      "https://knowledgeai-seven.vercel.app";
+
+    fetch(`${origin}/api/process-chunks`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) {
-      const text = await res.text();
-      console.error("N8N webhook error:", res.status, text);
-      return NextResponse.json({ error: "Webhook failed" }, { status: 502 });
-    }
+      body: JSON.stringify({ document_id, collection_id, user_id, document_name }),
+    }).catch((err) => console.error("Worker spawn failed:", err));
 
     return NextResponse.json({ success: true });
   } catch (err) {
-    console.error("Process document error:", err);
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    console.error("process-document error:", err);
+    return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }
