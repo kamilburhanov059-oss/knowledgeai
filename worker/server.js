@@ -1,4 +1,5 @@
 const http = require("http");
+global.WebSocket = require("ws");
 const { createClient } = require("@supabase/supabase-js");
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
