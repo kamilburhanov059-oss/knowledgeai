@@ -8,8 +8,8 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const OPENAI_KEY = process.env.OPENAI_API_KEY!;
 
-function splitText(text: string, chunkSize: number, overlap: number): string[] {
-  const chunks: string[] = [];
+function splitText(text: string, chunkSize: number, overlap: number): TextChunk[] {
+  const chunks: TextChunk[] = [];
   let start = 0;
 
   while (start < text.length) {
@@ -29,13 +29,52 @@ function splitText(text: string, chunkSize: number, overlap: number): string[] {
       }
     }
 
-    const chunk = text.slice(start, end).trim();
-    if (chunk.length > 50) chunks.push(chunk);
+    const content = text.slice(start, end).trim();
+    if (content.length > 50) chunks.push({ content, start });
 
     start = Math.max(start + 1, end - overlap);
   }
 
   return chunks;
+}
+
+interface TextChunk {
+  content: string;
+  start: number;
+}
+
+interface PageBreak {
+  offset: number;
+  page: number;
+}
+
+// PDF extraction embeds "[[PAGE:n]]" markers before each page's text. Strip them
+// out and remember where each page starts so chunks can be attributed to a page.
+function stripPageMarkers(text: string): { text: string; breaks: PageBreak[] } {
+  const re = /\[\[PAGE:(\d+)\]\]\n?/g;
+  const breaks: PageBreak[] = [];
+  let result = "";
+  let lastIndex = 0;
+  let match;
+
+  while ((match = re.exec(text))) {
+    result += text.slice(lastIndex, match.index);
+    breaks.push({ offset: result.length, page: parseInt(match[1], 10) });
+    lastIndex = match.index + match[0].length;
+  }
+  result += text.slice(lastIndex);
+
+  return { text: result, breaks };
+}
+
+function pageForOffset(breaks: PageBreak[], offset: number): number | null {
+  if (breaks.length === 0) return null;
+  let page = breaks[0].page;
+  for (const b of breaks) {
+    if (b.offset <= offset) page = b.page;
+    else break;
+  }
+  return page;
 }
 
 async function batchEmbeddings(texts: string[]): Promise<number[][]> {
@@ -98,7 +137,8 @@ export async function POST(req: NextRequest) {
       .replace(/[ \t]{2,}/g, " ")
       .trim();
 
-    const chunks = splitText(cleanText, 2000, 200);
+    const { text: pageMarkerFreeText, breaks: pageBreaks } = stripPageMarkers(cleanText);
+    const chunks = splitText(pageMarkerFreeText, 2000, 200);
 
     if (chunks.length === 0) {
       await admin
@@ -109,21 +149,25 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Batch create embeddings (200 per request)
-    const embeddings = await batchEmbeddings(chunks);
+    const embeddings = await batchEmbeddings(chunks.map((c) => c.content));
 
     // 4. Delete old chunks for this document
     await admin.from("kai_chunks").delete().eq("document_id", document_id);
 
     // 5. Bulk insert (200 per batch to stay within Supabase limits)
-    const rows = chunks.map((content, i) => ({
-      document_id,
-      collection_id,
-      user_id,
-      document_name: document_name || "Document",
-      content,
-      embedding: embeddings[i],
-      chunk_index: i,
-    }));
+    const rows = chunks.map(({ content, start }, i) => {
+      const page = pageForOffset(pageBreaks, start);
+      return {
+        document_id,
+        collection_id,
+        user_id,
+        document_name: document_name || "Document",
+        content,
+        embedding: embeddings[i],
+        chunk_index: i,
+        metadata: page != null ? { page } : null,
+      };
+    });
 
     const INSERT_BATCH = 200;
     for (let i = 0; i < rows.length; i += INSERT_BATCH) {

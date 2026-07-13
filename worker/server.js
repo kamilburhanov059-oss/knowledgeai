@@ -28,12 +28,42 @@ function splitText(text, chunkSize = 2000, overlap = 200) {
       else if (lastSpace > start) end = lastSpace + 1;
     }
 
-    const chunk = text.slice(start, end).trim();
-    if (chunk.length > 50) chunks.push(chunk);
+    const content = text.slice(start, end).trim();
+    if (content.length > 50) chunks.push({ content, start });
     start = Math.max(start + 1, end - overlap);
   }
 
   return chunks;
+}
+
+// ── Page tracking ─────────────────────────────────────────────────────────────
+// PDF extraction embeds "[[PAGE:n]]" markers before each page's text. Strip them
+// out and remember where each page starts so chunks can be attributed to a page.
+function stripPageMarkers(text) {
+  const re = /\[\[PAGE:(\d+)\]\]\n?/g;
+  const breaks = [];
+  let result = "";
+  let lastIndex = 0;
+  let match;
+
+  while ((match = re.exec(text))) {
+    result += text.slice(lastIndex, match.index);
+    breaks.push({ offset: result.length, page: parseInt(match[1], 10) });
+    lastIndex = match.index + match[0].length;
+  }
+  result += text.slice(lastIndex);
+
+  return { text: result, breaks };
+}
+
+function pageForOffset(breaks, offset) {
+  if (breaks.length === 0) return null;
+  let page = breaks[0].page;
+  for (const b of breaks) {
+    if (b.offset <= offset) page = b.page;
+    else break;
+  }
+  return page;
 }
 
 // ── Batch embeddings (200 per request) ───────────────────────────────────────
@@ -86,27 +116,32 @@ async function processDocument({ document_id, collection_id, user_id, document_n
       .replace(/[ \t]{2,}/g, " ")
       .trim();
 
-    const chunks = splitText(cleanText, 2000, 200);
+    const { text: pageMarkedFreeText, breaks: pageBreaks } = stripPageMarkers(cleanText);
+    const chunks = splitText(pageMarkedFreeText, 2000, 200);
     console.log(`Chunks: ${chunks.length}`);
 
     if (chunks.length === 0) throw new Error("No text content found");
 
     // 3. Batch embeddings
-    const embeddings = await batchEmbeddings(chunks);
+    const embeddings = await batchEmbeddings(chunks.map((c) => c.content));
 
     // 4. Delete old chunks
     await admin.from("kai_chunks").delete().eq("document_id", document_id);
 
     // 5. Bulk insert (200 per batch)
-    const rows = chunks.map((content, i) => ({
-      document_id,
-      collection_id,
-      user_id,
-      document_name: document_name || "Document",
-      content,
-      embedding: embeddings[i],
-      chunk_index: i,
-    }));
+    const rows = chunks.map(({ content, start }, i) => {
+      const page = pageForOffset(pageBreaks, start);
+      return {
+        document_id,
+        collection_id,
+        user_id,
+        document_name: document_name || "Document",
+        content,
+        embedding: embeddings[i],
+        chunk_index: i,
+        metadata: page != null ? { page } : null,
+      };
+    });
 
     const INSERT_BATCH = 200;
     for (let i = 0; i < rows.length; i += INSERT_BATCH) {

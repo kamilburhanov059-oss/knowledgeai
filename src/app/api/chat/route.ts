@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     const { data: [{ embedding }] } = await embRes.json();
 
     // 2. Search similar chunks via Supabase RPC
-    const { data: chunks, error: rpcErr } = await admin.rpc("match_chunks", {
+    const { data: chunks, error: rpcErr } = await admin.rpc("match_chunks_v2", {
       query_embedding: embedding,
       collection_id_filter: collection_id,
       user_id_filter: user.id,
@@ -54,8 +54,8 @@ export async function POST(req: NextRequest) {
 
     // 3. Build context from chunks
     const context = chunks
-      .map((c: { content: string; document_name: string }, i: number) =>
-        `[Источник ${i + 1} — ${c.document_name}]\n${c.content}`)
+      .map((c: { content: string; document_name: string; page_number: number | null }, i: number) =>
+        `[Источник ${i + 1} — ${c.document_name}${c.page_number ? `, стр. ${c.page_number}` : ""}]\n${c.content}`)
       .join("\n\n---\n\n");
 
     // 4. Call OpenAI Chat
@@ -83,8 +83,9 @@ export async function POST(req: NextRequest) {
     const chatData = await chatRes.json();
     const answer = chatData.choices[0].message.content;
 
-    const sources = chunks.map((c: { document_name: string; content: string }) => ({
+    const sources = chunks.map((c: { document_name: string; content: string; page_number: number | null }) => ({
       book: c.document_name,
+      page: c.page_number,
       excerpt: c.content.slice(0, 200) + (c.content.length > 200 ? "..." : ""),
     }));
 

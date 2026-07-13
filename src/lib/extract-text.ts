@@ -40,7 +40,7 @@ async function extractPDF(file: File): Promise<string> {
     const text = content.items
       .map((item: unknown) => (item as { str?: string }).str ?? "")
       .join(" ");
-    if (text.trim()) pages.push(text);
+    if (text.trim()) pages.push(`[[PAGE:${i}]]\n${text}`);
   }
 
   return pages.join("\n\n");

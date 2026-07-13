@@ -11,7 +11,7 @@ import { useLang } from "@/context/lang-context";
 import { t } from "@/lib/i18n";
 import { supabase } from "@/lib/supabase";
 
-interface Source { book: string; excerpt: string; }
+interface Source { book: string; excerpt: string; page?: number | null; }
 interface Message { id: string; role: "user" | "assistant"; content: string; sources?: Source[]; }
 
 
@@ -20,11 +20,16 @@ function SourceCard({ source }: { source: Source }) {
   return (
     <div style={{ borderRadius: "10px", overflow: "hidden", background: "var(--color-background)", border: "1px solid var(--color-card-border)" }}>
       <button onClick={() => setOpen(!open)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", background: "none", border: "none", cursor: "pointer", WebkitTapHighlightColor: "transparent" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
           <FileText size={13} style={{ color: "var(--color-primary)", flexShrink: 0 }} />
-          <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-foreground)", textAlign: "left" }}>
+          <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-foreground)", textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {source.book}
           </span>
+          {source.page != null && (
+            <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-primary)", background: "var(--color-primary-light)", borderRadius: "6px", padding: "1px 6px", flexShrink: 0 }}>
+              стр. {source.page}
+            </span>
+          )}
         </div>
         <ChevronRight size={13} style={{ color: "var(--color-muted)", transform: open ? "rotate(90deg)" : "none", transition: "transform 0.2s", flexShrink: 0 }} />
       </button>
