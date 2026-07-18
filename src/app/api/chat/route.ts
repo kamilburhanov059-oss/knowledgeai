@@ -89,6 +89,12 @@ export async function POST(req: NextRequest) {
       excerpt: c.content.slice(0, 200) + (c.content.length > 200 ? "..." : ""),
     }));
 
+    const { error: saveErr } = await admin.from("kai_chat_messages").insert([
+      { collection_id, user_id: user.id, role: "user", content: question, sources: null },
+      { collection_id, user_id: user.id, role: "assistant", content: answer, sources },
+    ]);
+    if (saveErr) console.error("Failed to save chat messages:", saveErr.message);
+
     return NextResponse.json({ success: true, answer, sources, chunks_count: chunks.length });
   } catch (err) {
     console.error("Chat API error:", err);

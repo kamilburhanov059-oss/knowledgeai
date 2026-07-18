@@ -67,12 +67,45 @@ function ChatPageInner() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [input]);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) window.location.href = "/login";
     });
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    supabase
+      .from("kai_chat_messages")
+      .select("id, role, content, sources, created_at")
+      .eq("collection_id", collection.id)
+      .order("created_at", { ascending: true })
+      .then(({ data }) => {
+        if (cancelled || !data || data.length === 0) return;
+        setMessages([
+          makeWelcome(),
+          ...data.map((m) => ({
+            id: m.id as string,
+            role: m.role as "user" | "assistant",
+            content: m.content as string,
+            sources: (m.sources as Source[] | null) ?? undefined,
+          })),
+        ]);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collection.id]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -231,12 +264,13 @@ function ChatPageInner() {
         )}
         <div style={{ display: "flex", alignItems: "flex-end", gap: "10px", padding: "10px 14px", borderRadius: "18px", background: "var(--color-card)", border: "1px solid var(--color-card-border)" }}>
           <textarea
+            ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
             placeholder={TC.placeholder}
             rows={1}
-            style={{ flex: 1, background: "transparent", border: "none", outline: "none", resize: "none", fontSize: "15px", lineHeight: 1.5, color: "var(--color-foreground)", maxHeight: "100px", fontFamily: "inherit" }}
+            style={{ flex: 1, background: "transparent", border: "none", outline: "none", resize: "none", fontSize: "15px", lineHeight: 1.5, color: "var(--color-foreground)", maxHeight: "160px", overflowY: "auto", fontFamily: "inherit" }}
           />
           <button
             onPointerDown={() => send(input)}
