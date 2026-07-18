@@ -1,6 +1,9 @@
 const http = require("http");
 global.WebSocket = require("ws");
 const { createClient } = require("@supabase/supabase-js");
+const { loadDocx, readXml, writeXml, toBuffer } = require("./lib/docx-zip");
+const { extractFlatText, applyReplacements, applyPlaceholders } = require("./lib/docx-splice");
+const { convertDocxToPdf } = require("./lib/libreoffice");
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -168,6 +171,123 @@ async function processDocument({ document_id, collection_id, user_id, document_n
   }
 }
 
+// ── Template generation ──────────────────────────────────────────────────────
+// Asks the model for the concrete edits to make, then hands them to the splice
+// engine. Placeholder-mode gets a name->value map (matched against the actual
+// {{...}} spans in the XML); freeform-mode gets old_text/new_text pairs, where
+// old_text must be an exact copy from the document — applyReplacements() itself
+// verifies each one is actually found before touching anything, so a
+// hallucinated snippet is silently skipped rather than corrupting the document.
+async function getReplacements({ mode, flatText, instruction, placeholderNames }) {
+  const isPlaceholder = mode === "placeholder" && placeholderNames && placeholderNames.length > 0;
+
+  const system = isPlaceholder
+    ? `Ты помогаешь заполнять шаблон документа. В документе есть плейсхолдеры: ${placeholderNames.map((n) => `{{${n}}}`).join(", ")}. По инструкции пользователя определи значение для каждого плейсхолдера, который можно уверенно заполнить. Верни JSON вида {"replacements":[{"placeholder":"ИМЯ","value":"значение"}]}. Не включай плейсхолдеры, для которых в инструкции нет данных.`
+    : `Ты редактируешь документ по инструкции пользователя. Ниже дан полный текст документа. Определи, какие фрагменты нужно заменить и на что. old_text ДОЛЖЕН быть дословной копией фрагмента из текста документа (символ в символ, включая пробелы и пунктуацию) — не перефразируй и не сокращай его. Верни JSON вида {"replacements":[{"old_text":"...","new_text":"..."}]}. Если для инструкции нет подходящего места в документе — не включай такую замену.`;
+
+  const user = isPlaceholder
+    ? `Инструкция пользователя: ${instruction}`
+    : `Текст документа:\n${flatText}\n\n---\n\nИнструкция пользователя: ${instruction}`;
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${OPENAI_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.2,
+    }),
+  });
+  if (!res.ok) throw new Error("OpenAI request failed: " + (await res.text()));
+
+  const data = await res.json();
+  let parsed;
+  try {
+    parsed = JSON.parse(data.choices[0].message.content);
+  } catch {
+    throw new Error("Failed to parse AI response as JSON");
+  }
+  const raw = Array.isArray(parsed.replacements) ? parsed.replacements : [];
+
+  return { isPlaceholder, raw };
+}
+
+async function processTemplateGeneration({ generation_id, template_id, instruction }) {
+  console.log(`[${new Date().toISOString()}] Generating: ${generation_id} (template ${template_id})`);
+
+  try {
+    const { data: template, error: tErr } = await admin
+      .from("kai_templates")
+      .select("*")
+      .eq("id", template_id)
+      .single();
+    if (tErr || !template) throw new Error("Template not found");
+
+    const { data: fileData, error: dlErr } = await admin.storage.from("templates").download(template.storage_path);
+    if (dlErr || !fileData) throw new Error("Failed to download template: " + (dlErr?.message || "unknown"));
+    const docxBuffer = Buffer.from(await fileData.arrayBuffer());
+
+    const zip = loadDocx(docxBuffer);
+    const documentXml = readXml(zip, "word/document.xml");
+    if (!documentXml) throw new Error("Invalid .docx: word/document.xml not found");
+
+    const flatText = extractFlatText(documentXml);
+    const { isPlaceholder, raw } = await getReplacements({
+      mode: template.mode,
+      flatText,
+      instruction,
+      placeholderNames: template.placeholder_names || [],
+    });
+
+    let result;
+    if (isPlaceholder) {
+      const valueMap = {};
+      for (const r of raw) {
+        if (r.placeholder && r.value != null) valueMap[String(r.placeholder).trim()] = r.value;
+      }
+      result = applyPlaceholders(documentXml, valueMap);
+    } else {
+      const replacements = raw
+        .filter((r) => r.old_text && r.new_text != null)
+        .map((r) => ({ oldText: r.old_text, newText: String(r.new_text), replaceAll: false }));
+      result = applyReplacements(documentXml, replacements);
+    }
+
+    writeXml(zip, "word/document.xml", result.xml);
+    const filledDocx = toBuffer(zip);
+
+    const pdfBuffer = await convertDocxToPdf(filledDocx, generation_id);
+
+    const outputPath = `${template.user_id}/${template_id}/generations/${generation_id}.pdf`;
+    const { error: upErr } = await admin.storage
+      .from("templates")
+      .upload(outputPath, pdfBuffer, { contentType: "application/pdf", upsert: true });
+    if (upErr) throw new Error("Failed to upload result: " + upErr.message);
+
+    await admin
+      .from("kai_template_generations")
+      .update({
+        status: "ready",
+        output_storage_path: outputPath,
+        applied_count: result.applied.length,
+        skipped: result.skipped.length ? result.skipped : null,
+      })
+      .eq("id", generation_id);
+
+    console.log(`Done: generation ${generation_id} — applied ${result.applied.length}, skipped ${result.skipped.length}`);
+  } catch (err) {
+    console.error(`Error generating ${generation_id}:`, err.message);
+    await admin
+      .from("kai_template_generations")
+      .update({ status: "error", error_message: err.message })
+      .eq("id", generation_id);
+  }
+}
+
 // ── HTTP Server ───────────────────────────────────────────────────────────────
 const server = http.createServer((req, res) => {
   // Health check
@@ -204,6 +324,34 @@ const server = http.createServer((req, res) => {
 
       // Process without blocking
       processDocument(data);
+    });
+    return;
+  }
+
+  // Template generation endpoint
+  if (req.method === "POST" && req.url === "/generate-template") {
+    if (req.headers["x-worker-secret"] !== WORKER_SECRET) {
+      res.writeHead(401, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Unauthorized" }));
+      return;
+    }
+
+    let body = "";
+    req.on("data", (chunk) => (body += chunk));
+    req.on("end", () => {
+      let data;
+      try {
+        data = JSON.parse(body);
+      } catch {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Invalid JSON" }));
+        return;
+      }
+
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ success: true, queued: true }));
+
+      processTemplateGeneration(data);
     });
     return;
   }

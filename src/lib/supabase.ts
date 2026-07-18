@@ -27,3 +27,27 @@ export type KaiDocument = {
   processed_at: string | null;
   created_at: string;
 };
+
+export type KaiTemplate = {
+  id: string;
+  user_id: string;
+  name: string;
+  original_filename: string;
+  storage_path: string;
+  mode: "placeholder" | "freeform";
+  placeholder_names: string[] | null;
+  created_at: string;
+};
+
+export type KaiTemplateGeneration = {
+  id: string;
+  template_id: string;
+  user_id: string;
+  instruction: string;
+  status: "processing" | "ready" | "error";
+  output_storage_path: string | null;
+  applied_count: number | null;
+  skipped: { oldText: string; reason: string }[] | null;
+  error_message: string | null;
+  created_at: string;
+};

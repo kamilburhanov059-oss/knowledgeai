@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Brain, Plus, Search, MoreVertical, MessageSquare, BookOpen, Trash2, X, TrendingUp } from "lucide-react";
+import { Brain, Plus, Search, MoreVertical, MessageSquare, BookOpen, Trash2, X, TrendingUp, FileText } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LangToggle } from "@/components/lang-toggle";
 import { useLang } from "@/context/lang-context";
@@ -126,6 +126,9 @@ export default function DashboardPage() {
             <span style={{ fontWeight: 700, fontSize: "18px", color: "var(--color-foreground)" }}>KnowledgeAI</span>
           </Link>
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <Link href="/templates" style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 14px", borderRadius: "10px", fontSize: "13px", fontWeight: 600, textDecoration: "none", background: "var(--color-card)", border: "1px solid var(--color-card-border)", color: "var(--color-foreground)" }}>
+              <FileText size={14} /> <span className="hide-mobile">{lang === "uz" ? "Shablonlar" : "Шаблоны"}</span>
+            </Link>
             <LangToggle />
             <ThemeToggle />
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
