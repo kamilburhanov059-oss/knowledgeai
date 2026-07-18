@@ -50,8 +50,12 @@ export default function LoginPage() {
       if (e) { setError(e.message); setLoading(false); return; }
       router.push("/dashboard");
     } else {
-      const { error: e } = await supabase.auth.signUp({ email, password });
+      const { data, error: e } = await supabase.auth.signUp({ email, password });
       if (e) { setError(e.message); setLoading(false); return; }
+      if (data.session) {
+        router.push("/dashboard");
+        return;
+      }
       setSuccess(TA.checkEmail);
       setLoading(false);
     }
