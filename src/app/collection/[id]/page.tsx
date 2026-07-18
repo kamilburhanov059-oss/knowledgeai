@@ -57,6 +57,27 @@ function UploadModal({ onClose, onAdd, T, lang }: {
     }
   };
 
+  const handleUrl = async () => {
+    if (!url.trim()) return;
+    setExtracting(true);
+    setExtractError("");
+    try {
+      const res = await fetch("/api/fetch-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: url.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Не удалось загрузить страницу");
+      await onAdd(urlTitle.trim() || data.title || url.trim(), "url", data.content.length, data.content);
+      onClose();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      setExtractError(msg || (lang === "uz" ? "Havolani yuklashda xato" : "Ошибка при загрузке ссылки"));
+      setExtracting(false);
+    }
+  };
+
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
       <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }} onClick={extracting ? undefined : onClose} />
@@ -138,20 +159,30 @@ function UploadModal({ onClose, onAdd, T, lang }: {
           )}
 
           {tab === "url" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={T.urlPlaceholder}
-                style={{ width: "100%", padding: "12px 16px", borderRadius: "12px", outline: "none", fontSize: "14px", background: "var(--color-background)", border: "1px solid var(--color-card-border)", color: "var(--color-foreground)", boxSizing: "border-box" }} />
-              <input value={urlTitle} onChange={(e) => setUrlTitle(e.target.value)} placeholder={T.titlePlaceholder}
-                style={{ width: "100%", padding: "12px 16px", borderRadius: "12px", outline: "none", fontSize: "14px", background: "var(--color-background)", border: "1px solid var(--color-card-border)", color: "var(--color-foreground)", boxSizing: "border-box" }} />
-              <button disabled={!url.trim()} onClick={async () => {
-                if (!url.trim()) return;
-                await onAdd(urlTitle || url, "url", 0, url);
-                onClose();
-              }}
-                style={{ width: "100%", padding: "12px", borderRadius: "12px", fontWeight: 600, fontSize: "14px", border: "none", cursor: "pointer", background: "var(--color-primary)", color: "white", opacity: url.trim() ? 1 : 0.4 }}>
-                {T.loadUrl}
-              </button>
-            </div>
+            extracting ? (
+              <div style={{ border: "2px dashed var(--color-card-border)", borderRadius: "16px", padding: "40px 20px", textAlign: "center", background: "var(--color-background)" }}>
+                <Loader2 size={36} style={{ color: "var(--color-primary)", margin: "0 auto 14px", animation: "spin 1s linear infinite" }} />
+                <p style={{ fontWeight: 600, color: "var(--color-foreground)", marginBottom: "4px" }}>
+                  {lang === "uz" ? "Sahifa yuklanmoqda..." : "Загружаем страницу..."}
+                </p>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={T.urlPlaceholder}
+                  style={{ width: "100%", padding: "12px 16px", borderRadius: "12px", outline: "none", fontSize: "14px", background: "var(--color-background)", border: "1px solid var(--color-card-border)", color: "var(--color-foreground)", boxSizing: "border-box" }} />
+                <input value={urlTitle} onChange={(e) => setUrlTitle(e.target.value)} placeholder={T.titlePlaceholder}
+                  style={{ width: "100%", padding: "12px 16px", borderRadius: "12px", outline: "none", fontSize: "14px", background: "var(--color-background)", border: "1px solid var(--color-card-border)", color: "var(--color-foreground)", boxSizing: "border-box" }} />
+                <button disabled={!url.trim()} onClick={handleUrl}
+                  style={{ width: "100%", padding: "12px", borderRadius: "12px", fontWeight: 600, fontSize: "14px", border: "none", cursor: "pointer", background: "var(--color-primary)", color: "white", opacity: url.trim() ? 1 : 0.4 }}>
+                  {T.loadUrl}
+                </button>
+                {extractError && (
+                  <div style={{ padding: "10px 14px", borderRadius: "10px", background: "#ef444418", border: "1px solid #ef444440", fontSize: "13px", color: "#ef4444" }}>
+                    {extractError}
+                  </div>
+                )}
+              </div>
+            )
           )}
         </div>
       </div>
