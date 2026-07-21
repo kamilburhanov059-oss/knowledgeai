@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.knowledgeai.app",
+      "sha256_cert_fingerprints": [
+        "C0:CA:4A:DA:8C:31:C4:1A:35:6C:76:50:80:53:08:C6:D6:BA:2D:12:00:90:7C:EF:47:E0:FF:BE:39:6E:93:CD"
+      ]
+    }
+  }
+]
