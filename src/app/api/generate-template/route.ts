@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { hasServerAccess } from "@/lib/limits";
 
 export const maxDuration = 30;
 export const dynamic = "force-dynamic";
@@ -19,6 +20,13 @@ export async function POST(req: NextRequest) {
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
     const { data: { user }, error: authErr } = await admin.auth.getUser(token);
     if (authErr || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    if (!(await hasServerAccess(admin, user.id, user.created_at))) {
+      return NextResponse.json(
+        { error: "Пробный период закончился. Оформите подписку, чтобы продолжить пользоваться KnowledgeAI." },
+        { status: 403 }
+      );
+    }
 
     const { template_id, instruction } = await req.json();
     if (!template_id || !instruction?.trim()) {

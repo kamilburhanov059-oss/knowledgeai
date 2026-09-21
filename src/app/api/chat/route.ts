@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { hasServerAccess } from "@/lib/limits";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -21,6 +22,14 @@ export async function POST(req: NextRequest) {
     const { question, collection_id } = await req.json();
     if (!question?.trim() || !collection_id) {
       return NextResponse.json({ error: "Missing question or collection_id" }, { status: 400 });
+    }
+
+    // 3-day trial, then requires an active subscription.
+    if (!(await hasServerAccess(admin, user.id, user.created_at))) {
+      return NextResponse.json(
+        { error: "Пробный период закончился. Оформите подписку, чтобы продолжить пользоваться KnowledgeAI." },
+        { status: 403 }
+      );
     }
 
     // 1. Create embedding for the question
