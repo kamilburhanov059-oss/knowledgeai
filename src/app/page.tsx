@@ -8,6 +8,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { LangToggle } from "@/components/lang-toggle";
 import { useLang } from "@/context/lang-context";
 import { t } from "@/lib/i18n";
+import { translate } from "@/lib/translate";
 import { supabase } from "@/lib/supabase";
 
 const featureIcons = [BookOpen, Brain, Globe, Shield, Zap, Sparkles];
@@ -50,7 +51,7 @@ export default function LandingPage() {
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <LangToggle />
             <ThemeToggle />
-            <Link href="/dashboard" style={{ padding: "8px 16px", borderRadius: "10px", background: "var(--color-primary)", color: "white", fontWeight: 600, fontSize: "14px", textDecoration: "none", whiteSpace: "nowrap" }}>
+            <Link href="/login" style={{ padding: "8px 16px", borderRadius: "10px", background: "var(--color-primary)", color: "white", fontWeight: 600, fontSize: "14px", textDecoration: "none", whiteSpace: "nowrap" }}>
               {T.nav.login}
             </Link>
           </div>
@@ -79,14 +80,14 @@ export default function LandingPage() {
             <Link href="/dashboard" style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "14px 28px", borderRadius: "14px", background: "linear-gradient(135deg, #7c3aed, #a855f7)", color: "white", fontWeight: 700, fontSize: "16px", textDecoration: "none", boxShadow: "0 0 30px rgba(124,58,237,0.4)" }}>
               {T.hero.startFree} <ChevronRight size={20} />
             </Link>
-            <button style={{ padding: "14px 28px", borderRadius: "14px", background: "var(--color-card)", border: "1px solid var(--color-card-border)", color: "var(--color-foreground)", fontWeight: 600, fontSize: "16px", cursor: "pointer" }}>
+            <button onClick={() => document.getElementById("preview")?.scrollIntoView({ behavior: "smooth" })} style={{ padding: "14px 28px", borderRadius: "14px", background: "var(--color-card)", border: "1px solid var(--color-card-border)", color: "var(--color-foreground)", fontWeight: 600, fontSize: "16px", cursor: "pointer" }}>
               {T.hero.watchDemo}
             </button>
           </div>
         </section>
 
         {/* Превью */}
-        <section className="preview-section">
+        <section id="preview" className="preview-section">
           <div style={{ borderRadius: "20px", padding: "2px", background: "linear-gradient(135deg, rgba(124,58,237,0.4), rgba(168,85,247,0.2))" }}>
             <div style={{ borderRadius: "18px", background: "var(--color-card)", padding: "20px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "18px" }}>
@@ -143,7 +144,7 @@ export default function LandingPage() {
             <div className="grid-pricing">
               {T.pricing.plans.map((plan, i) => {
                 const accent = i === 1;
-                const prices = ["0", "5", "12"];
+                const prices = ["0", "5"];
                 return (
                   <div key={plan.name} style={{ borderRadius: "20px", padding: "24px", background: accent ? "linear-gradient(135deg, #7c3aed, #a855f7)" : "var(--color-background)", border: accent ? "none" : "1px solid var(--color-card-border)", position: "relative" }}>
                     {accent && (
@@ -154,7 +155,9 @@ export default function LandingPage() {
                     <p style={{ fontWeight: 600, color: accent ? "rgba(255,255,255,0.8)" : "var(--color-muted)", marginBottom: "8px", fontSize: "14px" }}>{plan.name}</p>
                     <div style={{ display: "flex", alignItems: "flex-end", gap: "4px", marginBottom: "20px" }}>
                       <span style={{ fontSize: "40px", fontWeight: 800, color: accent ? "#fff" : "var(--color-foreground)" }}>${prices[i]}</span>
-                      <span style={{ fontSize: "13px", color: accent ? "rgba(255,255,255,0.7)" : "var(--color-muted)", marginBottom: "7px" }}>/мес</span>
+                      {accent && (
+                        <span style={{ fontSize: "13px", color: "rgba(255,255,255,0.7)", marginBottom: "7px" }}>/{translate(lang, "мес")}</span>
+                      )}
                     </div>
                     <ul style={{ listStyle: "none", marginBottom: "20px", display: "flex", flexDirection: "column", gap: "10px" }}>
                       {plan.features.map((feat) => (
@@ -164,7 +167,7 @@ export default function LandingPage() {
                         </li>
                       ))}
                     </ul>
-                    <Link href="/dashboard" style={{ display: "block", textAlign: "center", padding: "11px", borderRadius: "11px", background: accent ? "rgba(255,255,255,0.2)" : "var(--color-primary)", color: "#fff", fontWeight: 600, fontSize: "14px", textDecoration: "none" }}>
+                    <Link href={accent ? "/billing" : "/dashboard"} style={{ display: "block", textAlign: "center", padding: "11px", borderRadius: "11px", background: accent ? "rgba(255,255,255,0.2)" : "var(--color-primary)", color: "#fff", fontWeight: 600, fontSize: "14px", textDecoration: "none" }}>
                       {T.pricing.start}
                     </Link>
                   </div>
@@ -183,7 +186,10 @@ export default function LandingPage() {
             </div>
             <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-muted)" }}>KnowledgeAI</span>
           </div>
-          <p style={{ fontSize: "12px", color: "var(--color-muted)" }}>© 2025 KnowledgeAI. {T.footer}</p>
+          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+            <Link href="/privacy" style={{ fontSize: "12px", color: "var(--color-muted)", textDecoration: "none" }}>{translate(lang, "Конфиденциальность")}</Link>
+            <p style={{ fontSize: "12px", color: "var(--color-muted)" }}>© 2026 KnowledgeAI. {T.footer}</p>
+          </div>
         </div>
       </footer>
     </div>

@@ -37,6 +37,7 @@
 
 html {
   height: 100%;
+  overflow-x: hidden;
 }
 
 body {
@@ -44,6 +45,8 @@ body {
   color: var(--color-foreground);
   font-family: var(--font-sans), system-ui, sans-serif;
   min-height: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
   transition: background-color 0.3s ease, color 0.3s ease;
   -webkit-font-smoothing: antialiased;
 }
@@ -238,8 +241,10 @@ body {
 
 .grid-pricing {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 20px;
+  max-width: 640px;
+  margin: 0 auto;
 }
 
 .grid-collections {
@@ -272,7 +277,18 @@ body {
 
 /* ── Mobile ── */
 @media (max-width: 768px) {
-  .nav-inner { padding: 0 16px; }
+  .nav-inner {
+    padding: 10px 16px;
+    height: auto;
+    min-height: 64px;
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .nav-inner > *:last-child {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    row-gap: 8px;
+  }
   .page-container { padding: 32px 16px; }
   .hero-section { padding: 64px 16px 48px; }
   .section-inner { padding: 0 16px 56px; }

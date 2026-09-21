@@ -2,13 +2,19 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Brain, Plus, Search, MoreVertical, MessageSquare, BookOpen, Trash2, X, TrendingUp, FileText } from "lucide-react";
+import { Brain, Plus, Search, MoreVertical, MessageSquare, BookOpen, Trash2, X, TrendingUp, FileText, Sparkles } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LangToggle } from "@/components/lang-toggle";
+import { OnboardingTutorial } from "@/components/onboarding-tutorial";
+import { Paywall } from "@/components/paywall";
 import { useLang } from "@/context/lang-context";
 import { t } from "@/lib/i18n";
+import { translate } from "@/lib/translate";
 import { supabase, type KaiCollection } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
+import { isSubscriptionActive } from "@/lib/limits";
+import { useIsTwa } from "@/hooks/useIsTwa";
+import { useAccessGate } from "@/hooks/useAccessGate";
 
 const EMOJIS = ["📚", "📐", "⚖️", "🧬", "💻", "🎭", "🌍", "🔬", "📊", "🏛️", "🧠", "✈️"];
 
@@ -64,23 +70,73 @@ export default function DashboardPage() {
 
   const [collections, setCollections] = useState<KaiCollection[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [isPremium, setIsPremium] = useState(false);
+  const isTwa = useIsTwa();
+  const { loading: gateLoading, hasAccess } = useAccessGate(user);
 
   useEffect(() => {
     if (user) loadCollections();
   }, [user]);
 
+  useEffect(() => {
+    if (!user) return;
+    isSubscriptionActive(user.id).then((active) => {
+      setIsPremium(active);
+    });
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (typeof window !== "undefined" && window.localStorage.getItem("kai_geo_tracked") === user.id) return;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) return;
+      fetch("/api/track-geo", { method: "POST", headers: { Authorization: `Bearer ${session.access_token}` } })
+        .then(() => window.localStorage.setItem("kai_geo_tracked", user.id))
+        .catch(() => {});
+    });
+  }, [user]);
+
+  useEffect(() => {
+    if (user && !user.user_metadata?.onboarded) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setShowOnboarding(true);
+    }
+  }, [user]);
+
+  const handleOnboardingDone = async () => {
+    setShowOnboarding(false);
+    await supabase.auth.updateUser({ data: { onboarded: true } });
+  };
+
+  const withTimeout = <T,>(promise: PromiseLike<T>, ms: number): Promise<T> =>
+    Promise.race([
+      Promise.resolve(promise),
+      new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`Timed out after ${ms}ms`)), ms)),
+    ]);
+
   const loadCollections = async () => {
     setLoading(true);
+    setLoadError("");
     try {
-      const { data } = await supabase
-        .from("kai_collections")
-        .select("*")
-        .eq("user_id", user!.id)
-        .order("created_at", { ascending: false });
+      const { data, error } = await withTimeout(
+        supabase
+          .from("kai_collections")
+          .select("*")
+          .eq("user_id", user!.id)
+          .order("created_at", { ascending: false }),
+        15000
+      );
+      if (error) throw error;
       if (data) setCollections(data);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("loadCollections failed:", err);
+      setLoadError(msg);
     } finally {
       setLoading(false);
     }
@@ -88,13 +144,24 @@ export default function DashboardPage() {
 
   const handleCreate = async (name: string, emoji: string, desc: string) => {
     if (!user) return;
-    const color = COLORS[Math.floor(Math.random() * COLORS.length)];
-    const { data } = await supabase
-      .from("kai_collections")
-      .insert({ user_id: user.id, name, emoji, color, description: desc || "" })
-      .select()
-      .single();
-    if (data) setCollections((prev) => [data, ...prev]);
+    setLoadError("");
+    try {
+      const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+      const { data, error } = await withTimeout(
+        supabase
+          .from("kai_collections")
+          .insert({ user_id: user.id, name, emoji, color, description: desc || "" })
+          .select()
+          .single(),
+        15000
+      );
+      if (error) throw error;
+      if (data) setCollections((prev) => [data, ...prev]);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("handleCreate failed:", err);
+      setLoadError(msg);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -109,13 +176,18 @@ export default function DashboardPage() {
   const statColors = ["#7c3aed", "#0ea5e9", "#10b981", "#f59e0b"];
   const statValues = [collections.length, 0, 0, 0];
 
-  if (authLoading) {
+  if (authLoading || gateLoading) {
     return <div style={{ minHeight: "100vh", background: "var(--color-background)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-muted)", fontSize: "14px" }}>{t[lang].auth.loading}</div>;
+  }
+
+  if (!hasAccess) {
+    return <Paywall />;
   }
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--color-background)" }}>
       {showCreate && <CreateModal onClose={() => setShowCreate(false)} onCreate={handleCreate} T={T.create} />}
+      {showOnboarding && <OnboardingTutorial onDone={handleOnboardingDone} />}
 
       <nav style={{ position: "sticky", top: 0, zIndex: 100, borderBottom: "1px solid var(--color-card-border)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", background: "color-mix(in srgb, var(--color-background) 88%, transparent)" }}>
         <div className="nav-inner">
@@ -127,8 +199,19 @@ export default function DashboardPage() {
           </Link>
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <Link href="/templates" style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 14px", borderRadius: "10px", fontSize: "13px", fontWeight: 600, textDecoration: "none", background: "var(--color-card)", border: "1px solid var(--color-card-border)", color: "var(--color-foreground)" }}>
-              <FileText size={14} /> <span className="hide-mobile">{lang === "uz" ? "Shablonlar" : "Шаблоны"}</span>
+              <FileText size={14} /> <span className="hide-mobile">{translate(lang, "Шаблоны")}</span>
             </Link>
+            {!isTwa && (
+              isPremium ? (
+                <span style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 14px", borderRadius: "10px", fontSize: "13px", fontWeight: 700, background: "var(--color-primary-light)", color: "var(--color-primary)" }}>
+                  <Sparkles size={14} /> <span className="hide-mobile">Premium</span>
+                </span>
+              ) : (
+                <Link href="/billing" style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 14px", borderRadius: "10px", fontSize: "13px", fontWeight: 700, textDecoration: "none", background: "var(--color-primary)", color: "white" }}>
+                  <Sparkles size={14} /> <span className="hide-mobile">{translate(lang, "Оформить подписку")}</span>
+                </Link>
+              )
+            )}
             <LangToggle />
             <ThemeToggle />
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -181,9 +264,15 @@ export default function DashboardPage() {
           </button>
         </div>
 
+        {loadError && (
+          <div style={{ padding: "12px 16px", borderRadius: "12px", background: "#ef444418", border: "1px solid #ef444440", fontSize: "13px", color: "#ef4444", marginBottom: "16px", wordBreak: "break-word" }}>
+            {loadError}
+          </div>
+        )}
+
         {loading ? (
           <div style={{ textAlign: "center", padding: "80px 0", color: "var(--color-muted)", fontSize: "14px" }}>
-            {lang === "uz" ? "Yuklanmoqda..." : "Загрузка..."}
+            {translate(lang, "Загрузка...")}
           </div>
         ) : filtered.length === 0 ? (
           <div style={{ textAlign: "center", padding: "80px 0" }}>

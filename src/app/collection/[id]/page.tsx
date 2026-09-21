@@ -2,15 +2,18 @@
 
 import { Suspense, useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { useParams, useSearchParams } from "next/navigation";
-import { Brain, ArrowLeft, Upload, Trash2, MessageSquare, CheckCircle, XCircle, X, Plus, Loader2 } from "lucide-react";
+import { useParams, useSearchParams, useRouter } from "next/navigation";
+import { Brain, ArrowLeft, Upload, Trash2, MessageSquare, CheckCircle, XCircle, X, Plus, Loader2, HelpCircle } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LangToggle } from "@/components/lang-toggle";
-import { useLang } from "@/context/lang-context";
+import { useLang, type Lang } from "@/context/lang-context";
 import { t } from "@/lib/i18n";
+import { translate } from "@/lib/translate";
 import { supabase, type KaiDocument } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { extractText } from "@/lib/extract-text";
+import { useAccessGate } from "@/hooks/useAccessGate";
+import { Paywall } from "@/components/paywall";
 
 const ACCEPTED = ".pdf,.docx,.doc,.txt,.md";
 const FORMAT_LABELS: Record<string, string> = { pdf: "PDF", docx: "Word", doc: "Word", txt: "TXT", md: "MD" };
@@ -25,7 +28,7 @@ function UploadModal({ onClose, onAdd, T, lang }: {
   onClose: () => void;
   onAdd: (name: string, type: string, size: number, content: string) => Promise<void>;
   T: typeof t["ru"]["collection"]["upload"];
-  lang: "ru" | "uz";
+  lang: Lang;
 }) {
   const [tab, setTab] = useState<Tab>("file");
   const [text, setText] = useState("");
@@ -42,7 +45,7 @@ function UploadModal({ onClose, onAdd, T, lang }: {
     try {
       const content = await extractText(file);
       if (!content.trim()) {
-        setExtractError(lang === "uz" ? "Fayl bo'sh yoki matn topilmadi" : "Файл пустой или текст не найден");
+        setExtractError(translate(lang, "Файл пустой или текст не найден"));
         setExtracting(false);
         return;
       }
@@ -52,7 +55,7 @@ function UploadModal({ onClose, onAdd, T, lang }: {
       onClose();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
-      setExtractError(msg || (lang === "uz" ? "Faylni o'qishda xato" : "Ошибка при чтении файла"));
+      setExtractError(msg || translate(lang, "Ошибка при чтении файла"));
       setExtracting(false);
     }
   };
@@ -73,7 +76,7 @@ function UploadModal({ onClose, onAdd, T, lang }: {
       onClose();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
-      setExtractError(msg || (lang === "uz" ? "Havolani yuklashda xato" : "Ошибка при загрузке ссылки"));
+      setExtractError(msg || translate(lang, "Ошибка при загрузке ссылки"));
       setExtracting(false);
     }
   };
@@ -107,10 +110,10 @@ function UploadModal({ onClose, onAdd, T, lang }: {
                 <div style={{ border: "2px dashed var(--color-card-border)", borderRadius: "16px", padding: "40px 20px", textAlign: "center", background: "var(--color-background)" }}>
                   <Loader2 size={36} style={{ color: "var(--color-primary)", margin: "0 auto 14px", animation: "spin 1s linear infinite" }} />
                   <p style={{ fontWeight: 600, color: "var(--color-foreground)", marginBottom: "4px" }}>
-                    {lang === "uz" ? "Matn ajratilmoqda..." : "Извлекаем текст..."}
+                    {translate(lang, "Извлекаем текст...")}
                   </p>
                   <p style={{ fontSize: "13px", color: "var(--color-muted)" }}>
-                    {lang === "uz" ? "Biroz kuting" : "Подождите немного"}
+                    {translate(lang, "Подождите немного")}
                   </p>
                 </div>
               ) : (
@@ -163,7 +166,7 @@ function UploadModal({ onClose, onAdd, T, lang }: {
               <div style={{ border: "2px dashed var(--color-card-border)", borderRadius: "16px", padding: "40px 20px", textAlign: "center", background: "var(--color-background)" }}>
                 <Loader2 size={36} style={{ color: "var(--color-primary)", margin: "0 auto 14px", animation: "spin 1s linear infinite" }} />
                 <p style={{ fontWeight: 600, color: "var(--color-foreground)", marginBottom: "4px" }}>
-                  {lang === "uz" ? "Sahifa yuklanmoqda..." : "Загружаем страницу..."}
+                  {translate(lang, "Загружаем страницу...")}
                 </p>
               </div>
             ) : (
@@ -209,15 +212,81 @@ function StatusIcon({ status }: { status: KaiDocument["status"] }) {
   return <Loader2 size={18} style={{ color: "#f59e0b", animation: "spin 1s linear infinite" }} />;
 }
 
-function statusLabel(status: KaiDocument["status"], lang: "ru" | "uz") {
-  if (status === "ready") return lang === "uz" ? "Tayyor" : "Готово";
-  if (status === "error") return lang === "uz" ? "Xato" : "Ошибка";
-  return lang === "uz" ? "Ishlov berilmoqda..." : "Обрабатывается...";
+function TestConfigModal({ onClose, onGenerate, generating, error, lang }: {
+  onClose: () => void;
+  onGenerate: (format: "multiple_choice" | "open_ended", count: number) => void;
+  generating: boolean;
+  error: string;
+  lang: Lang;
+}) {
+  const [format, setFormat] = useState<"multiple_choice" | "open_ended">("multiple_choice");
+  const [count, setCount] = useState(5);
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
+      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }} onClick={generating ? undefined : onClose} />
+      <div style={{ position: "relative", width: "100%", maxWidth: "400px", borderRadius: "24px", padding: "24px", background: "var(--color-card)", border: "1px solid var(--color-card-border)", boxShadow: "0 25px 50px rgba(0,0,0,0.5)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
+          <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--color-foreground)" }}>{translate(lang, "Создать тест")}</h2>
+          {!generating && (
+            <button onClick={onClose} style={{ color: "var(--color-muted)", background: "none", border: "none", cursor: "pointer" }}><X size={20} /></button>
+          )}
+        </div>
+
+        {generating ? (
+          <div style={{ textAlign: "center", padding: "20px 0" }}>
+            <Loader2 size={32} style={{ color: "var(--color-primary)", margin: "0 auto 14px", animation: "spin 1s linear infinite" }} />
+            <p style={{ fontSize: "14px", color: "var(--color-foreground)", fontWeight: 600 }}>{translate(lang, "Готовим вопросы...")}</p>
+          </div>
+        ) : (
+          <>
+            <p style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-muted)", marginBottom: "10px" }}>{translate(lang, "Формат")}</p>
+            <div style={{ display: "flex", gap: "8px", marginBottom: "18px" }}>
+              {(["multiple_choice", "open_ended"] as const).map((f) => (
+                <button key={f} onClick={() => setFormat(f)}
+                  style={{ flex: 1, padding: "12px 10px", borderRadius: "12px", fontSize: "13px", fontWeight: 600, border: `2px solid ${format === f ? "var(--color-primary)" : "transparent"}`, cursor: "pointer", background: format === f ? "var(--color-primary-light)" : "var(--color-background)", color: "var(--color-foreground)" }}>
+                  {f === "multiple_choice" ? translate(lang, "С вариантами") : translate(lang, "Открытые вопросы")}
+                </button>
+              ))}
+            </div>
+
+            <p style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-muted)", marginBottom: "10px" }}>{translate(lang, "Количество вопросов")}</p>
+            <div style={{ display: "flex", gap: "8px", marginBottom: "22px" }}>
+              {[5, 10, 15].map((n) => (
+                <button key={n} onClick={() => setCount(n)}
+                  style={{ flex: 1, padding: "10px", borderRadius: "12px", fontSize: "13px", fontWeight: 600, border: `2px solid ${count === n ? "var(--color-primary)" : "transparent"}`, cursor: "pointer", background: count === n ? "var(--color-primary-light)" : "var(--color-background)", color: "var(--color-foreground)" }}>
+                  {n}
+                </button>
+              ))}
+            </div>
+
+            {error && (
+              <div style={{ marginBottom: "16px", padding: "10px 14px", borderRadius: "10px", background: "#ef444418", border: "1px solid #ef444440", fontSize: "13px", color: "#ef4444" }}>
+                {error}
+              </div>
+            )}
+
+            <button onClick={() => onGenerate(format, count)}
+              style={{ width: "100%", padding: "13px", borderRadius: "12px", fontWeight: 700, fontSize: "15px", border: "none", cursor: "pointer", background: "var(--color-primary)", color: "white" }}>
+              {translate(lang, "Сгенерировать")}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function statusLabel(status: KaiDocument["status"], lang: Lang) {
+  if (status === "ready") return translate(lang, "Готово");
+  if (status === "error") return translate(lang, "Ошибка");
+  return translate(lang, "Обрабатывается...");
 }
 
 function CollectionPageInner() {
   const params = useParams();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const { lang } = useLang();
   const T = t[lang].collection;
   const { user } = useAuth();
@@ -225,7 +294,7 @@ function CollectionPageInner() {
   const collection = {
     id: params.id as string,
     emoji: searchParams.get("emoji") || "📚",
-    name: searchParams.get("name") || (lang === "uz" ? "Bo'lim" : "Раздел"),
+    name: searchParams.get("name") || translate(lang, "Раздел"),
     description: searchParams.get("desc") || "",
     color: searchParams.get("color") || "#7c3aed",
   };
@@ -234,7 +303,11 @@ function CollectionPageInner() {
   const [loading, setLoading] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [testDocId, setTestDocId] = useState<string | null>(null);
+  const [testGenerating, setTestGenerating] = useState(false);
+  const [testError, setTestError] = useState("");
   const pollTimers = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map());
+  const { loading: gateLoading, hasAccess } = useAccessGate(user);
 
   useEffect(() => {
     loadDocs();
@@ -342,7 +415,39 @@ function CollectionPageInner() {
     setDeleteId(null);
   };
 
+  const handleGenerateTest = async (format: "multiple_choice" | "open_ended", count: number) => {
+    if (!testDocId) return;
+    setTestGenerating(true);
+    setTestError("");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch("/api/generate-test", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ collection_id: collection.id, document_id: testDocId, format, question_count: count, lang }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || `Ошибка сервера: ${res.status}`);
+      router.push(`/collection/${collection.id}/test/${body.test_id}?name=${encodeURIComponent(collection.name)}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Неизвестная ошибка";
+      setTestError(msg);
+      setTestGenerating(false);
+    }
+  };
+
   const chatHref = `/collection/${collection.id}/chat?name=${encodeURIComponent(collection.name)}&emoji=${encodeURIComponent(collection.emoji)}&color=${encodeURIComponent(collection.color)}`;
+
+  if (gateLoading) {
+    return <div style={{ minHeight: "100vh", background: "var(--color-background)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-muted)", fontSize: "14px" }}>{translate(lang, "Загрузка...")}</div>;
+  }
+
+  if (!hasAccess) {
+    return <Paywall />;
+  }
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--color-background)" }}>
@@ -351,6 +456,16 @@ function CollectionPageInner() {
           onClose={() => setShowUpload(false)}
           onAdd={handleAdd}
           T={T.upload}
+          lang={lang}
+        />
+      )}
+
+      {testDocId && (
+        <TestConfigModal
+          onClose={() => { setTestDocId(null); setTestError(""); }}
+          onGenerate={handleGenerateTest}
+          generating={testGenerating}
+          error={testError}
           lang={lang}
         />
       )}
@@ -429,7 +544,7 @@ function CollectionPageInner() {
 
         {loading ? (
           <div style={{ textAlign: "center", padding: "60px 0", color: "var(--color-muted)", fontSize: "14px" }}>
-            {lang === "uz" ? "Yuklanmoqda..." : "Загрузка..."}
+            {translate(lang, "Загрузка...")}
           </div>
         ) : docs.length === 0 ? (
           <div style={{ textAlign: "center", padding: "60px 0" }}>
@@ -464,6 +579,11 @@ function CollectionPageInner() {
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
                   <StatusIcon status={doc.status} />
+                  {doc.status === "ready" && (
+                    <button onClick={() => setTestDocId(doc.id)} className="btn-icon" title={translate(lang, "Тест")} style={{ width: "34px", height: "34px", borderRadius: "8px", background: "none", color: "var(--color-muted)" }}>
+                      <HelpCircle size={15} />
+                    </button>
+                  )}
                   <button onClick={() => setDeleteId(doc.id)} className="btn-icon" style={{ width: "34px", height: "34px", borderRadius: "8px", background: "none", color: "var(--color-muted)" }}>
                     <Trash2 size={15} />
                   </button>

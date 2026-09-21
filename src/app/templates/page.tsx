@@ -7,14 +7,18 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { LangToggle } from "@/components/lang-toggle";
 import { useLang } from "@/context/lang-context";
 import { t } from "@/lib/i18n";
+import { translate } from "@/lib/translate";
 import { supabase, type KaiTemplate } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { extractText } from "@/lib/extract-text";
 import { detectPlaceholders } from "@/lib/detect-placeholders";
+import { useAccessGate } from "@/hooks/useAccessGate";
+import { Paywall } from "@/components/paywall";
 
 export default function TemplatesPage() {
   const { lang } = useLang();
   const { user, loading: authLoading, signOut } = useAuth();
+  const { loading: gateLoading, hasAccess } = useAccessGate(user);
 
   const [templates, setTemplates] = useState<KaiTemplate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,7 +50,7 @@ export default function TemplatesPage() {
   const handleUpload = async (file: File) => {
     if (!user) return;
     if (!file.name.toLowerCase().endsWith(".docx")) {
-      setUploadError(lang === "uz" ? "Faqat .docx fayllar qo'llab-quvvatlanadi" : "Пока поддерживаются только файлы .docx");
+      setUploadError(translate(lang, "Пока поддерживаются только файлы .docx"));
       return;
     }
 
@@ -81,7 +85,7 @@ export default function TemplatesPage() {
 
       setTemplates((prev) => [data, ...prev]);
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : (lang === "uz" ? "Shablonni yuklashda xato" : "Ошибка загрузки шаблона"));
+      setUploadError(err instanceof Error ? err.message : translate(lang, "Ошибка загрузки шаблона"));
     } finally {
       setUploading(false);
     }
@@ -93,8 +97,12 @@ export default function TemplatesPage() {
     setDeleteId(null);
   };
 
-  if (authLoading) {
+  if (authLoading || gateLoading) {
     return <div style={{ minHeight: "100vh", background: "var(--color-background)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-muted)", fontSize: "14px" }}>{t[lang].auth.loading}</div>;
+  }
+
+  if (!hasAccess) {
+    return <Paywall />;
   }
 
   return (
@@ -106,11 +114,11 @@ export default function TemplatesPage() {
             <div style={{ width: "56px", height: "56px", borderRadius: "16px", background: "#ef444422", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
               <Trash2 size={24} color="#ef4444" />
             </div>
-            <p style={{ fontSize: "18px", fontWeight: 700, color: "var(--color-foreground)", marginBottom: "8px" }}>{lang === "uz" ? "Shablonni o'chirish?" : "Удалить шаблон?"}</p>
-            <p style={{ fontSize: "14px", color: "var(--color-muted)", marginBottom: "24px" }}>{lang === "uz" ? "Bu amalni ortga qaytarib bo'lmaydi" : "Это действие нельзя отменить"}</p>
+            <p style={{ fontSize: "18px", fontWeight: 700, color: "var(--color-foreground)", marginBottom: "8px" }}>{translate(lang, "Удалить шаблон?")}</p>
+            <p style={{ fontSize: "14px", color: "var(--color-muted)", marginBottom: "24px" }}>{translate(lang, "Это действие нельзя отменить")}</p>
             <div style={{ display: "flex", gap: "10px" }}>
-              <button onClick={() => setDeleteId(null)} style={{ flex: 1, padding: "12px", borderRadius: "12px", fontWeight: 600, fontSize: "14px", cursor: "pointer", background: "var(--color-background)", border: "1px solid var(--color-card-border)", color: "var(--color-foreground)" }}>{lang === "uz" ? "Bekor qilish" : "Отмена"}</button>
-              <button onClick={() => handleDelete(deleteId)} style={{ flex: 1, padding: "12px", borderRadius: "12px", fontWeight: 600, fontSize: "14px", cursor: "pointer", background: "#ef4444", color: "white", border: "none" }}>{lang === "uz" ? "O'chirish" : "Удалить"}</button>
+              <button onClick={() => setDeleteId(null)} style={{ flex: 1, padding: "12px", borderRadius: "12px", fontWeight: 600, fontSize: "14px", cursor: "pointer", background: "var(--color-background)", border: "1px solid var(--color-card-border)", color: "var(--color-foreground)" }}>{translate(lang, "Отмена")}</button>
+              <button onClick={() => handleDelete(deleteId)} style={{ flex: 1, padding: "12px", borderRadius: "12px", fontWeight: 600, fontSize: "14px", cursor: "pointer", background: "#ef4444", color: "white", border: "none" }}>{translate(lang, "Удалить")}</button>
             </div>
           </div>
         </div>
@@ -126,7 +134,7 @@ export default function TemplatesPage() {
               <div style={{ width: "34px", height: "34px", borderRadius: "10px", background: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <Brain size={18} color="white" />
               </div>
-              <span style={{ fontWeight: 700, fontSize: "18px", color: "var(--color-foreground)" }}>{lang === "uz" ? "Shablonlar" : "Шаблоны"}</span>
+              <span style={{ fontWeight: 700, fontSize: "18px", color: "var(--color-foreground)" }}>{translate(lang, "Шаблоны")}</span>
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -142,19 +150,17 @@ export default function TemplatesPage() {
       <main className="page-container">
         <div style={{ marginBottom: "24px" }}>
           <h1 style={{ fontSize: "clamp(22px, 4vw, 28px)", fontWeight: 800, color: "var(--color-foreground)", marginBottom: "4px" }}>
-            {lang === "uz" ? "Hujjat shablonlari" : "Документы и шаблоны"}
+            {translate(lang, "Документы и шаблоны")}
           </h1>
           <p style={{ color: "var(--color-muted)", fontSize: "14px" }}>
-            {lang === "uz"
-              ? "Word shablonini yuklang, matnda nimani o'zgartirish kerakligini yozing — tayyor PDF olasiz"
-              : "Загрузите Word-шаблон, опишите что вставить — получите готовый PDF"}
+            {translate(lang, "Загрузите Word-шаблон, опишите что вставить — получите готовый PDF")}
           </p>
         </div>
 
         {uploading ? (
           <div style={{ border: "2px dashed var(--color-card-border)", borderRadius: "16px", padding: "40px 20px", textAlign: "center", background: "var(--color-card)", marginBottom: "24px" }}>
             <Loader2 size={32} style={{ color: "var(--color-primary)", margin: "0 auto 12px", animation: "spin 1s linear infinite" }} />
-            <p style={{ fontWeight: 600, color: "var(--color-foreground)" }}>{lang === "uz" ? "Yuklanmoqda..." : "Загружаем и анализируем..."}</p>
+            <p style={{ fontWeight: 600, color: "var(--color-foreground)" }}>{translate(lang, "Загружаем и анализируем...")}</p>
           </div>
         ) : (
           <div
@@ -169,10 +175,10 @@ export default function TemplatesPage() {
               <Plus size={22} style={{ color: "var(--color-primary)" }} />
             </div>
             <p style={{ fontWeight: 600, color: "var(--color-foreground)", marginBottom: "4px" }}>
-              {lang === "uz" ? "Word shablonini (.docx) tashlang yoki tanlang" : "Перетащите Word-шаблон (.docx) сюда или нажмите"}
+              {translate(lang, "Перетащите Word-шаблон (.docx) сюда или нажмите")}
             </p>
             <p style={{ fontSize: "13px", color: "var(--color-muted)" }}>
-              {lang === "uz" ? "Faqat .docx qo'llab-quvvatlanadi" : "Пока поддерживается только .docx"}
+              {translate(lang, "Пока поддерживается только .docx")}
             </p>
           </div>
         )}
@@ -185,13 +191,13 @@ export default function TemplatesPage() {
 
         {loading ? (
           <div style={{ textAlign: "center", padding: "60px 0", color: "var(--color-muted)", fontSize: "14px" }}>
-            {lang === "uz" ? "Yuklanmoqda..." : "Загрузка..."}
+            {translate(lang, "Загрузка...")}
           </div>
         ) : templates.length === 0 ? (
           <div style={{ textAlign: "center", padding: "60px 0" }}>
             <p style={{ fontSize: "48px", marginBottom: "16px" }}>📄</p>
             <p style={{ fontSize: "16px", fontWeight: 600, color: "var(--color-foreground)" }}>
-              {lang === "uz" ? "Hali shablonlar yo'q" : "Шаблонов пока нет"}
+              {translate(lang, "Шаблонов пока нет")}
             </p>
           </div>
         ) : (
@@ -209,7 +215,7 @@ export default function TemplatesPage() {
                 </div>
                 <h3 style={{ fontWeight: 700, fontSize: "15px", color: "var(--color-foreground)", marginBottom: "6px", paddingRight: "24px" }}>{tpl.name}</h3>
                 <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 700, background: "var(--color-primary-light)", color: "var(--color-primary)" }}>
-                  {tpl.mode === "placeholder" ? (lang === "uz" ? "Plейsxolderlar bilan" : "С плейсхолдерами") : (lang === "uz" ? "Erkin matn" : "Свободный текст")}
+                  {tpl.mode === "placeholder" ? translate(lang, "С плейсхолдерами") : translate(lang, "Свободный текст")}
                 </span>
               </Link>
             ))}

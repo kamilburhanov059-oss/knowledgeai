@@ -17,7 +17,7 @@ export function useAuth(redirect = true) {
       setLoading(false);
       resolved.current = true;
 
-      if (event === "SIGNED_OUT" && redirect) {
+      if (!session?.user && redirect) {
         router.push("/login");
       }
     });

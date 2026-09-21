@@ -8,6 +8,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { LangToggle } from "@/components/lang-toggle";
 import { useLang } from "@/context/lang-context";
 import { t } from "@/lib/i18n";
+import { translate, formatSkippedWarning } from "@/lib/translate";
 import { supabase, type KaiTemplate, type KaiTemplateGeneration } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -114,7 +115,7 @@ export default function TemplateDetailPage() {
   }
 
   if (!template) {
-    return <div style={{ minHeight: "100vh", background: "var(--color-background)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-muted)", fontSize: "14px" }}>{lang === "uz" ? "Shablon topilmadi" : "Шаблон не найден"}</div>;
+    return <div style={{ minHeight: "100vh", background: "var(--color-background)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-muted)", fontSize: "14px" }}>{translate(lang, "Шаблон не найден")}</div>;
   }
 
   return (
@@ -143,7 +144,7 @@ export default function TemplateDetailPage() {
         {template.mode === "placeholder" && template.placeholder_names && template.placeholder_names.length > 0 && (
           <div style={{ marginBottom: "20px", padding: "14px 16px", borderRadius: "12px", background: "var(--color-card)", border: "1px solid var(--color-card-border)" }}>
             <p style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-muted)", marginBottom: "8px" }}>
-              {lang === "uz" ? "Shablondagi maydonlar:" : "Поля в шаблоне:"}
+              {translate(lang, "Поля в шаблоне:")}
             </p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
               {template.placeholder_names.map((name) => (
@@ -158,8 +159,8 @@ export default function TemplateDetailPage() {
             value={instruction}
             onChange={(e) => setInstruction(e.target.value)}
             placeholder={template.mode === "placeholder"
-              ? (lang === "uz" ? "Masalan: FIO — Ivanov Ivan, Sana — 15.07.2026" : "Например: ФИО — Иванов Иван, Дата — 15.07.2026")
-              : (lang === "uz" ? "Nimani o'zgartirish kerakligini yozing..." : "Опишите, что нужно изменить в документе...")}
+              ? translate(lang, "Например: ФИО — Иванов Иван, Дата — 15.07.2026")
+              : translate(lang, "Опишите, что нужно изменить в документе...")}
             rows={4}
             style={{ width: "100%", padding: "14px 16px", borderRadius: "14px", outline: "none", fontSize: "14px", resize: "none", background: "var(--color-card)", border: "1px solid var(--color-card-border)", color: "var(--color-foreground)", boxSizing: "border-box", marginBottom: "10px", fontFamily: "inherit" }}
           />
@@ -174,16 +175,16 @@ export default function TemplateDetailPage() {
             style={{ display: "flex", alignItems: "center", gap: "8px", padding: "12px 22px", borderRadius: "12px", fontWeight: 600, fontSize: "14px", border: "none", cursor: instruction.trim() ? "pointer" : "default", background: instruction.trim() && !submitting ? "var(--color-primary)" : "var(--color-card-border)", color: "white", opacity: submitting ? 0.7 : 1 }}
           >
             {submitting ? <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} /> : <Send size={16} />}
-            {lang === "uz" ? "Yaratish" : "Сгенерировать"}
+            {translate(lang, "Сгенерировать")}
           </button>
         </div>
 
         <p style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-muted)", marginBottom: "12px" }}>
-          {lang === "uz" ? "Yaratilganlar" : "История генераций"}
+          {translate(lang, "История генераций")}
         </p>
 
         {generations.length === 0 ? (
-          <p style={{ fontSize: "13px", color: "var(--color-muted)" }}>{lang === "uz" ? "Hali hech narsa yaratilmagan" : "Пока ничего не сгенерировано"}</p>
+          <p style={{ fontSize: "13px", color: "var(--color-muted)" }}>{translate(lang, "Пока ничего не сгенерировано")}</p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             {generations.map((g) => (
@@ -196,27 +197,25 @@ export default function TemplateDetailPage() {
                 </div>
 
                 {g.status === "processing" && (
-                  <p style={{ fontSize: "12px", color: "var(--color-muted)", marginTop: "8px" }}>{lang === "uz" ? "Tayyorlanmoqda..." : "Готовим документ..."}</p>
+                  <p style={{ fontSize: "12px", color: "var(--color-muted)", marginTop: "8px" }}>{translate(lang, "Готовим документ...")}</p>
                 )}
 
                 {g.status === "error" && (
-                  <p style={{ fontSize: "12px", color: "#ef4444", marginTop: "8px" }}>{g.error_message || (lang === "uz" ? "Xatolik" : "Ошибка")}</p>
+                  <p style={{ fontSize: "12px", color: "#ef4444", marginTop: "8px" }}>{g.error_message || translate(lang, "Ошибка")}</p>
                 )}
 
                 {g.status === "ready" && (
                   <div style={{ marginTop: "10px" }}>
                     {g.skipped && g.skipped.length > 0 && (
                       <p style={{ fontSize: "12px", color: "#f59e0b", marginBottom: "8px" }}>
-                        {lang === "uz"
-                          ? `Diqqat: ${g.skipped.length} ta o'zgartirish topilmadi va o'tkazib yuborildi`
-                          : `Внимание: ${g.skipped.length} изменени${g.skipped.length === 1 ? "е" : "я"} не найдено в документе и было пропущено`}
+                        {formatSkippedWarning(lang, g.skipped.length)}
                       </p>
                     )}
                     <button
                       onClick={() => handleDownload(g.id)}
                       style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 14px", borderRadius: "10px", fontSize: "13px", fontWeight: 600, border: "none", cursor: "pointer", background: "var(--color-primary)", color: "white" }}
                     >
-                      <Download size={14} /> {lang === "uz" ? "PDF yuklab olish" : "Скачать PDF"}
+                      <Download size={14} /> {translate(lang, "Скачать PDF")}
                     </button>
                   </div>
                 )}

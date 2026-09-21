@@ -9,7 +9,11 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { LangToggle } from "@/components/lang-toggle";
 import { useLang } from "@/context/lang-context";
 import { t } from "@/lib/i18n";
+import { translate } from "@/lib/translate";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/hooks/useAuth";
+import { useAccessGate } from "@/hooks/useAccessGate";
+import { Paywall } from "@/components/paywall";
 
 interface Source { book: string; excerpt: string; page?: number | null; }
 interface Message { id: string; role: "user" | "assistant"; content: string; sources?: Source[]; }
@@ -47,11 +51,13 @@ function ChatPageInner() {
   const searchParams = useSearchParams();
   const { lang } = useLang();
   const TC = t[lang].chat;
+  const { user } = useAuth();
+  const { loading: gateLoading, hasAccess } = useAccessGate(user);
 
   const collection = {
     id: params.id as string,
     emoji: searchParams.get("emoji") || "📚",
-    name: searchParams.get("name") || (lang === "uz" ? "Bo'lim" : "Раздел"),
+    name: searchParams.get("name") || translate(lang, "Раздел"),
     color: searchParams.get("color") || "#7c3aed",
   };
 
@@ -162,12 +168,20 @@ function ChatPageInner() {
       setMessages((p) => [...p, {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: lang === "uz" ? `Xatolik: ${msg}` : `Ошибка: ${msg}`,
+        content: `${translate(lang, "Ошибка")}: ${msg}`,
       }]);
     } finally {
       setLoading(false);
     }
   };
+
+  if (gateLoading) {
+    return <div style={{ minHeight: "100vh", background: "var(--color-background)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-muted)", fontSize: "14px" }}>{translate(lang, "Загрузка...")}</div>;
+  }
+
+  if (!hasAccess) {
+    return <Paywall />;
+  }
 
   return (
     <div style={{ height: "100dvh", display: "flex", flexDirection: "column", background: "var(--color-background)", overflow: "hidden" }}>

@@ -8,6 +8,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { LangToggle } from "@/components/lang-toggle";
 import { useLang } from "@/context/lang-context";
 import { t } from "@/lib/i18n";
+import { translate } from "@/lib/translate";
 
 export default function LoginPage() {
   const { lang } = useLang();
@@ -35,12 +36,12 @@ export default function LoginPage() {
 
     const isASCII = (s: string) => /^[\x00-\x7F]*$/.test(s);
     if (!isASCII(email)) {
-      setError("Email должен содержать только латинские символы. Проверьте раскладку клавиатуры.");
+      setError(translate(lang, "Email должен содержать только латинские символы. Проверьте раскладку клавиатуры."));
       setLoading(false);
       return;
     }
     if (!isASCII(password)) {
-      setError("Пароль должен содержать только латинские символы и цифры.");
+      setError(translate(lang, "Пароль должен содержать только латинские символы и цифры."));
       setLoading(false);
       return;
     }
@@ -68,6 +69,22 @@ export default function LoginPage() {
     });
   };
 
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      setError(translate(lang, "Введите email, на который зарегистрирован аккаунт"));
+      return;
+    }
+    setLoading(true);
+    setError("");
+    setSuccess("");
+    const { error: e } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/callback`,
+    });
+    setLoading(false);
+    if (e) { setError(e.message); return; }
+    setSuccess(translate(lang, "Письмо со ссылкой для сброса пароля отправлено на почту"));
+  };
+
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "var(--color-background)" }}>
       <nav style={{ padding: "0 24px", height: "60px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--color-card-border)" }}>
@@ -92,7 +109,7 @@ export default function LoginPage() {
             </div>
             <h1 style={{ fontSize: "24px", fontWeight: 800, color: "var(--color-foreground)", marginBottom: "6px" }}>KnowledgeAI</h1>
             <p style={{ fontSize: "14px", color: "var(--color-muted)" }}>
-              {lang === "uz" ? "Shaxsiy AI-yordamchingiz" : "Персональный AI-ассистент"}
+              {translate(lang, "Персональный AI-ассистент")}
             </p>
           </div>
 
@@ -130,6 +147,12 @@ export default function LoginPage() {
                   placeholder={TA.enterPassword}
                   style={{ width: "100%", padding: "12px 16px", borderRadius: "12px", outline: "none", fontSize: "14px", background: "var(--color-background)", border: "1px solid var(--color-card-border)", color: "var(--color-foreground)", boxSizing: "border-box" }}
                 />
+                {tab === "in" && (
+                  <button type="button" onClick={handleForgotPassword} disabled={loading}
+                    style={{ marginTop: "8px", background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: "13px", color: "var(--color-primary)", fontWeight: 600 }}>
+                    {translate(lang, "Забыли пароль?")}
+                  </button>
+                )}
               </div>
 
               {error && (
@@ -153,7 +176,7 @@ export default function LoginPage() {
 
               <div style={{ display: "flex", alignItems: "center", gap: "12px", margin: "4px 0" }}>
                 <div style={{ flex: 1, height: "1px", background: "var(--color-card-border)" }} />
-                <span style={{ fontSize: "12px", color: "var(--color-muted)" }}>или</span>
+                <span style={{ fontSize: "12px", color: "var(--color-muted)" }}>{translate(lang, "или")}</span>
                 <div style={{ flex: 1, height: "1px", background: "var(--color-card-border)" }} />
               </div>
 
