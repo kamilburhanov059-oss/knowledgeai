@@ -51,3 +51,37 @@ export type KaiTemplateGeneration = {
   error_message: string | null;
   created_at: string;
 };
+
+export type KaiTest = {
+  id: string;
+  user_id: string;
+  collection_id: string;
+  document_id: string | null;
+  title: string;
+  format: "multiple_choice" | "open_ended";
+  question_count: number;
+  status: "processing" | "ready" | "error";
+  error_message: string | null;
+  created_at: string;
+};
+
+export type KaiTestQuestion = {
+  id: string;
+  test_id: string;
+  order_index: number;
+  question: string;
+  options: { key: string; text: string }[] | null;
+  correct_answer: string;
+  explanation: string | null;
+};
+
+export type KaiTestAttempt = {
+  id: string;
+  test_id: string;
+  user_id: string;
+  status: "in_progress" | "grading" | "completed";
+  score: number | null;
+  answers: { question_id: string; user_answer: string; is_correct: boolean; partial?: boolean; feedback?: string }[] | null;
+  created_at: string;
+  completed_at: string | null;
+};
