@@ -2,7 +2,7 @@ const http = require("http");
 global.WebSocket = require("ws");
 const { createClient } = require("@supabase/supabase-js");
 const { loadDocx, readXml, writeXml, toBuffer } = require("./lib/docx-zip");
-const { extractFlatText, applyReplacements, applyPlaceholders } = require("./lib/docx-splice");
+const { extractFlatText, applyReplacements, applyPlaceholders, findBlanks, applyBlankFills } = require("./lib/docx-splice");
 const { convertDocxToPdf } = require("./lib/libreoffice");
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -178,16 +178,37 @@ async function processDocument({ document_id, collection_id, user_id, document_n
 // old_text must be an exact copy from the document — applyReplacements() itself
 // verifies each one is actually found before touching anything, so a
 // hallucinated snippet is silently skipped rather than corrupting the document.
-async function getReplacements({ mode, flatText, instruction, placeholderNames }) {
+async function getReplacements({ mode, flatText, instruction, placeholderNames, blanks }) {
   const isPlaceholder = mode === "placeholder" && placeholderNames && placeholderNames.length > 0;
+  const hasBlanks = !isPlaceholder && blanks && blanks.length > 0;
 
-  const system = isPlaceholder
-    ? `Ты помогаешь заполнять шаблон документа. В документе есть плейсхолдеры: ${placeholderNames.map((n) => `{{${n}}}`).join(", ")}. По инструкции пользователя определи значение для каждого плейсхолдера, который можно уверенно заполнить. Верни JSON вида {"replacements":[{"placeholder":"ИМЯ","value":"значение"}]}. Не включай плейсхолдеры, для которых в инструкции нет данных.`
-    : `Ты редактируешь документ по инструкции пользователя. Ниже дан полный текст документа. Определи, какие фрагменты нужно заменить и на что. old_text ДОЛЖЕН быть дословной копией фрагмента из текста документа (символ в символ, включая пробелы и пунктуацию) — не перефразируй и не сокращай его. Верни JSON вида {"replacements":[{"old_text":"...","new_text":"..."}]}. Если для инструкции нет подходящего места в документе — не включай такую замену.`;
+  let system;
+  let user;
 
-  const user = isPlaceholder
-    ? `Инструкция пользователя: ${instruction}`
-    : `Текст документа:\n${flatText}\n\n---\n\nИнструкция пользователя: ${instruction}`;
+  if (isPlaceholder) {
+    system = `Ты помогаешь заполнять шаблон документа. В документе есть плейсхолдеры: ${placeholderNames.map((n) => `{{${n}}}`).join(", ")}. По инструкции пользователя определи значение для каждого плейсхолдера, который можно уверенно заполнить. Верни JSON вида {"replacements":[{"placeholder":"ИМЯ","value":"значение"}]}. Не включай плейсхолдеры, для которых в инструкции нет данных.`;
+    user = `Инструкция пользователя: ${instruction}`;
+  } else if (hasBlanks) {
+    // Blank runs ("__________") are located programmatically (exact offsets), not
+    // by asking the model to reproduce a long underscore run character-for-character
+    // — that's fragile (easy to miscount) and was the root cause of values landing
+    // next to the wrong blank or not replacing it at all. The model only has to
+    // pick a blank by its numeric id from a labeled, context-annotated list.
+    const blanksList = blanks.map((b) => `#${b.id}: ...${b.before}[ПРОПУСК]${b.after}...`).join("\n");
+    system = `Ты заполняешь пустые поля (пропуски) в документе и, если нужно, редактируешь остальной текст по инструкции пользователя.
+
+Ниже — пронумерованный список пропусков, найденных в документе. Каждый показан с окружающим текстом, [ПРОПУСК] обозначает место самого пропуска. По инструкции пользователя определи, какое значение подходит для каждого пропуска, ориентируясь на текст РЯДОМ с ним (например пропуск сразу после "ИП «" — это название/имя ИП; пропуск после "директора" — имя директора; и т.д.). Указывай fill ТОЛЬКО для тех пропусков, где по контексту и инструкции есть однозначное соответствие. Не путай название ИП с названием ООО, а имя человека с названием компании. Если для пропуска нет подходящих данных в инструкции — не включай его, не угадывай.
+
+Если инструкция также описывает изменение обычного (не пропущенного) текста документа — добавь такие правки в replacements: old_text должен быть дословной копией фрагмента (символ в символ, включая пробелы и пунктуацию) и встречаться в тексте документа РОВНО ОДИН РАЗ.
+
+Верни JSON вида {"fills":[{"id":0,"value":"значение"}],"replacements":[{"old_text":"...","new_text":"..."}]}.`;
+    user = `Пропуски в документе:\n${blanksList}\n\n---\n\nПолный текст документа (для контекста):\n${flatText}\n\n---\n\nИнструкция пользователя: ${instruction}`;
+  } else {
+    system = `Ты редактируешь документ по инструкции пользователя. Ниже дан полный текст документа. Определи, какие фрагменты нужно заменить и на что. old_text ДОЛЖЕН быть дословной копией фрагмента из текста документа (символ в символ, включая пробелы и пунктуацию) — не перефразируй и не сокращай его. old_text должен встречаться в тексте документа РОВНО ОДИН РАЗ. Если для инструкции нет подходящего места в документе — не включай такую замену.
+
+Верни JSON вида {"replacements":[{"old_text":"...","new_text":"..."}]}.`;
+    user = `Текст документа:\n${flatText}\n\n---\n\nИнструкция пользователя: ${instruction}`;
+  }
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -212,8 +233,9 @@ async function getReplacements({ mode, flatText, instruction, placeholderNames }
     throw new Error("Failed to parse AI response as JSON");
   }
   const raw = Array.isArray(parsed.replacements) ? parsed.replacements : [];
+  const rawFills = Array.isArray(parsed.fills) ? parsed.fills : [];
 
-  return { isPlaceholder, raw };
+  return { isPlaceholder, raw, rawFills };
 }
 
 async function processTemplateGeneration({ generation_id, template_id, instruction }) {
@@ -236,11 +258,15 @@ async function processTemplateGeneration({ generation_id, template_id, instructi
     if (!documentXml) throw new Error("Invalid .docx: word/document.xml not found");
 
     const flatText = extractFlatText(documentXml);
-    const { isPlaceholder, raw } = await getReplacements({
+    const willUsePlaceholders = template.mode === "placeholder" && (template.placeholder_names || []).length > 0;
+    const blanks = willUsePlaceholders ? [] : findBlanks(documentXml);
+
+    const { isPlaceholder, raw, rawFills } = await getReplacements({
       mode: template.mode,
       flatText,
       instruction,
       placeholderNames: template.placeholder_names || [],
+      blanks,
     });
 
     let result;
@@ -251,10 +277,26 @@ async function processTemplateGeneration({ generation_id, template_id, instructi
       }
       result = applyPlaceholders(documentXml, valueMap);
     } else {
+      const blankById = new Map(blanks.map((b) => [b.id, b]));
+      const fillList = rawFills
+        .filter((f) => f && f.id != null && f.value != null && blankById.has(f.id))
+        .map((f) => ({ id: f.id, ...blankById.get(f.id), value: String(f.value) }));
+
+      const fillResult = applyBlankFills(documentXml, fillList);
+
       const replacements = raw
         .filter((r) => r.old_text && r.new_text != null)
         .map((r) => ({ oldText: r.old_text, newText: String(r.new_text), replaceAll: false }));
-      result = applyReplacements(documentXml, replacements);
+      const replaceResult = applyReplacements(fillResult.xml, replacements);
+
+      result = {
+        xml: replaceResult.xml,
+        applied: [
+          ...fillResult.applied.map((a) => ({ oldText: `[пропуск #${a.id}]`, newText: a.value, count: 1 })),
+          ...replaceResult.applied,
+        ],
+        skipped: replaceResult.skipped,
+      };
     }
 
     writeXml(zip, "word/document.xml", result.xml);

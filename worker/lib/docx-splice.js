@@ -15,6 +15,7 @@ const RUN_RE = /<w:r\b[^>]*>[\s\S]*?<\/w:r>/g;
 const RPR_RE = /<w:rPr>[\s\S]*?<\/w:rPr>/;
 const T_RE = /<w:t\b[^>]*>([\s\S]*?)<\/w:t>/;
 const PLACEHOLDER_RE = /\{\{\s*([^{}]+?)\s*\}\}/g;
+const BLANK_RE = /_{3,}/g;
 
 function decodeXmlEntities(s) {
   return s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
@@ -136,6 +137,75 @@ function extractFlatText(documentXml) {
     .join("\n");
 }
 
+// Locates runs of 3+ underscores ("fill-in-the-blank" lines, common in contract
+// templates) with surrounding context. Unlike free-text substring matching, this
+// gives the caller exact (paragraphIndex, start, end) offsets up front — no need
+// for the LLM to reproduce a long, easy-to-miscount underscore run character-for-
+// character just to locate it.
+function findBlanks(documentXml, contextChars = 40) {
+  const paragraphs = documentXml.match(PARA_RE) || [];
+  const blanks = [];
+  let id = 0;
+
+  paragraphs.forEach((p, paragraphIndex) => {
+    const openTag = p.match(/^<w:p\b[^>]*>/)[0];
+    const inner = p.slice(openTag.length, p.length - "</w:p>".length);
+    const text = flatText(parseRuns(inner));
+
+    BLANK_RE.lastIndex = 0;
+    let m;
+    while ((m = BLANK_RE.exec(text))) {
+      const start = m.index;
+      const end = m.index + m[0].length;
+      blanks.push({
+        id: id++,
+        paragraphIndex,
+        start,
+        end,
+        before: text.slice(Math.max(0, start - contextChars), start),
+        after: text.slice(end, end + contextChars),
+      });
+    }
+  });
+
+  return blanks;
+}
+
+// Fills specific blank spans found by findBlanks(). fills: [{ id, paragraphIndex,
+// start, end, value }]. Offsets are exact (computed by findBlanks against the same
+// XML), so this never needs to search for text — it can't misfire on a repeated
+// blank the way substring matching would.
+function applyBlankFills(documentXml, fills) {
+  const applied = [];
+  const byParagraph = new Map();
+  for (const f of fills) {
+    if (!byParagraph.has(f.paragraphIndex)) byParagraph.set(f.paragraphIndex, []);
+    byParagraph.get(f.paragraphIndex).push(f);
+  }
+
+  let paragraphIndex = -1;
+  const newXml = documentXml.replace(PARA_RE, (paraMatch) => {
+    paragraphIndex++;
+    const list = byParagraph.get(paragraphIndex);
+    if (!list || list.length === 0) return paraMatch;
+
+    const openTag = paraMatch.match(/^<w:p\b[^>]*>/)[0];
+    const closeTag = "</w:p>";
+    const inner = paraMatch.slice(openTag.length, paraMatch.length - closeTag.length);
+    let segments = parseRuns(inner);
+
+    // Right-to-left so earlier spans' offsets stay valid as later ones splice in.
+    const sorted = [...list].sort((a, b) => b.start - a.start);
+    for (const f of sorted) {
+      segments = spliceSpan(segments, f.start, f.end, f.value);
+      applied.push({ id: f.id, value: f.value });
+    }
+    return openTag + segments.map((s) => s.xml).join("") + closeTag;
+  });
+
+  return { xml: newXml, applied };
+}
+
 function findPlaceholders(text) {
   const names = new Set();
   let m;
@@ -147,6 +217,17 @@ function findPlaceholders(text) {
 // replacements: [{ oldText, newText, replaceAll }]. replaceAll=true replaces every
 // occurrence across the whole document (placeholder mode); false replaces only the
 // first occurrence found (freeform mode, to avoid over-replacing generic phrases).
+function countOccurrences(text, sub) {
+  if (!sub) return 0;
+  let count = 0;
+  let idx = 0;
+  while ((idx = text.indexOf(sub, idx)) !== -1) {
+    count++;
+    idx += sub.length;
+  }
+  return count;
+}
+
 function applyReplacements(documentXml, replacements) {
   const applied = [];
   const skipped = [];
@@ -157,6 +238,22 @@ function applyReplacements(documentXml, replacements) {
       skipped.push({ oldText, reason: "empty" });
       continue;
     }
+
+    // Templates often repeat an identical blank ("__________") in several unrelated
+    // spots. If oldText isn't unique, blindly taking the first match would silently
+    // fill the wrong field — safer to skip and surface it than guess.
+    if (!replaceAll) {
+      const occurrences = countOccurrences(extractFlatText(workingXml), oldText);
+      if (occurrences === 0) {
+        skipped.push({ oldText, reason: "not_found" });
+        continue;
+      }
+      if (occurrences > 1) {
+        skipped.push({ oldText, reason: "ambiguous" });
+        continue;
+      }
+    }
+
     let totalCount = 0;
     workingXml = workingXml.replace(PARA_RE, (paraMatch) => {
       const remaining = replaceAll ? Infinity : totalCount > 0 ? 0 : 1;
@@ -211,4 +308,4 @@ function applyPlaceholders(documentXml, valueMap) {
   return { xml: newXml, applied, skipped };
 }
 
-module.exports = { extractFlatText, findPlaceholders, applyReplacements, applyPlaceholders, PLACEHOLDER_RE };
+module.exports = { extractFlatText, findPlaceholders, applyReplacements, applyPlaceholders, findBlanks, applyBlankFills, PLACEHOLDER_RE, BLANK_RE };
