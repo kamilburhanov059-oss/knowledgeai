@@ -21,6 +21,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing purchaseToken or productId" }, { status: 400 });
     }
 
+    const { data: existing } = await admin
+      .from("kai_play_purchases")
+      .select("user_id")
+      .eq("purchase_token", purchaseToken)
+      .maybeSingle();
+    if (existing && existing.user_id !== user.id) {
+      return NextResponse.json({ error: "Эта покупка уже привязана к другому аккаунту" }, { status: 409 });
+    }
+
     const purchase = await getSubscriptionPurchase(purchaseToken);
     const lineItem = purchase.lineItems?.find((li) => li.productId === productId) ?? purchase.lineItems?.[0];
     const active = isActiveState(purchase.subscriptionState);
@@ -47,6 +56,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, current_period_end: expiryTime });
   } catch (err) {
     console.error("billing/play/verify error:", err);
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return NextResponse.json({ error: "Не удалось проверить покупку" }, { status: 500 });
   }
 }

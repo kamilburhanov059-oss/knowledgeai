@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { signInternalRequest } from "@/lib/internal-auth";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -13,15 +14,30 @@ export async function POST(req: NextRequest) {
   let document_id = "";
 
   try {
-    const body = await req.json();
-    document_id = body.document_id;
-    const { collection_id, user_id, document_name } = body;
+    const token = req.headers.get("authorization")?.replace("Bearer ", "");
+    if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    if (!document_id || !collection_id || !user_id) {
+    const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+    const { data: { user }, error: authErr } = await admin.auth.getUser(token);
+    if (authErr || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const body = await req.json();
+    const { collection_id, document_name } = body;
+    const user_id = user.id;
+
+    if (!body.document_id || !collection_id) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+    const { data: owned } = await admin
+      .from("kai_documents")
+      .select("id")
+      .eq("id", body.document_id)
+      .eq("user_id", user_id)
+      .eq("collection_id", collection_id)
+      .maybeSingle();
+    if (!owned) return NextResponse.json({ error: "Document not found" }, { status: 404 });
+    document_id = body.document_id;
 
     // Mark as processing
     await admin
@@ -52,7 +68,7 @@ export async function POST(req: NextRequest) {
 
     const workerRes = await fetch(`${origin}/api/process-chunks`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-internal-signature": signInternalRequest(document_id) },
       body: JSON.stringify({ document_id, collection_id, user_id, document_name }),
       signal: AbortSignal.timeout(55000),
     });

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { verifyInternalRequest } from "@/lib/internal-auth";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -111,6 +112,9 @@ export async function POST(req: NextRequest) {
     if (!document_id || !collection_id || !user_id) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
+    if (!verifyInternalRequest(document_id, req.headers.get("x-internal-signature"))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
@@ -120,6 +124,7 @@ export async function POST(req: NextRequest) {
       .select("content")
       .eq("id", document_id)
       .eq("user_id", user_id)
+      .eq("collection_id", collection_id)
       .single();
 
     if (!doc?.content?.trim()) {

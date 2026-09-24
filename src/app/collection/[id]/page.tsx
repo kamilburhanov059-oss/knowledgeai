@@ -65,9 +65,10 @@ function UploadModal({ onClose, onAdd, T, lang }: {
     setExtracting(true);
     setExtractError("");
     try {
+      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch("/api/fetch-url", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}) },
         body: JSON.stringify({ url: url.trim() }),
       });
       const data = await res.json();
@@ -377,11 +378,11 @@ function CollectionPageInner() {
     startPolling(doc.id);
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch("/api/process-document", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}) },
         body: JSON.stringify({
-          user_id: user.id,
           document_id: doc.id,
           collection_id: collection.id,
           document_name: name,

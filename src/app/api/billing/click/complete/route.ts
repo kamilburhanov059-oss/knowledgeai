@@ -59,6 +59,13 @@ export async function POST(req: NextRequest) {
       .single();
     if (findErr || !payment) return respond(-6, "Transaction does not exist");
 
+    // Click retries Complete on network failures; a repeat must not extend the period again.
+    if (payment.status === "paid") return respond(-4, "Already paid", { merchant_confirm_id: payment.id });
+
+    if (Math.abs(Number(f.amount) - Number(payment.amount)) > 0.01) {
+      return respond(-2, "Incorrect parameter amount");
+    }
+
     // Click reports its own failure via a negative error field on the request.
     if (Number(f.error) < 0) {
       await admin.from("kai_payments").update({ status: "failed", error_note: f.error_note || null }).eq("id", payment.id);
