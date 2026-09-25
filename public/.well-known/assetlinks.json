@@ -5,7 +5,8 @@
       "namespace": "android_app",
       "package_name": "com.knowledgeai.app",
       "sha256_cert_fingerprints": [
-        "C0:CA:4A:DA:8C:31:C4:1A:35:6C:76:50:80:53:08:C6:D6:BA:2D:12:00:90:7C:EF:47:E0:FF:BE:39:6E:93:CD"
+        "C0:CA:4A:DA:8C:31:C4:1A:35:6C:76:50:80:53:08:C6:D6:BA:2D:12:00:90:7C:EF:47:E0:FF:BE:39:6E:93:CD",
+        "BC:37:7A:9E:2F:16:43:04:E6:CA:C3:B4:6A:5F:87:63:83:05:B9:B3:3C:4F:17:0F:73:F2:32:B5:AE:50:09:81"
       ]
     }
   }
