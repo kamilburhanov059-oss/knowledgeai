@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { Brain, Plus, Trash2, Loader2, FileText, ArrowLeft } from "lucide-react";
+import { Plus, Trash2, Loader2, FileText, ArrowLeft } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LangToggle } from "@/components/lang-toggle";
 import { useLang } from "@/context/lang-context";
@@ -14,6 +14,7 @@ import { extractText } from "@/lib/extract-text";
 import { detectPlaceholders } from "@/lib/detect-placeholders";
 import { useAccessGate } from "@/hooks/useAccessGate";
 import { Paywall } from "@/components/paywall";
+import { AppLogo } from "@/components/app-logo";
 
 export default function TemplatesPage() {
   const { lang } = useLang();
@@ -131,9 +132,7 @@ export default function TemplatesPage() {
               <ArrowLeft size={18} />
             </Link>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <div style={{ width: "34px", height: "34px", borderRadius: "10px", background: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <Brain size={18} color="white" />
-              </div>
+              <AppLogo size={34} radius={10} />
               <span style={{ fontWeight: 700, fontSize: "18px", color: "var(--color-foreground)" }}>{translate(lang, "Шаблоны")}</span>
             </div>
           </div>

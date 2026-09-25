@@ -2,13 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Brain } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LangToggle } from "@/components/lang-toggle";
 import { useLang } from "@/context/lang-context";
 import { t } from "@/lib/i18n";
 import { translate } from "@/lib/translate";
+import { AppLogo } from "@/components/app-logo";
 
 export default function LoginPage() {
   const { lang } = useLang();
@@ -89,9 +89,7 @@ export default function LoginPage() {
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "var(--color-background)" }}>
       <nav style={{ padding: "0 24px", height: "60px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--color-card-border)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <div style={{ width: "32px", height: "32px", borderRadius: "10px", background: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Brain size={16} color="white" />
-          </div>
+          <AppLogo size={32} radius={10} />
           <span style={{ fontWeight: 700, fontSize: "17px", color: "var(--color-foreground)" }}>KnowledgeAI</span>
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
@@ -104,9 +102,7 @@ export default function LoginPage() {
         <div style={{ width: "100%", maxWidth: "400px" }}>
 
           <div style={{ textAlign: "center", marginBottom: "32px" }}>
-            <div style={{ width: "64px", height: "64px", borderRadius: "20px", background: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-              <Brain size={30} color="white" />
-            </div>
+            <AppLogo size={64} radius={20} margin="0 auto 16px" />
             <h1 style={{ fontSize: "24px", fontWeight: 800, color: "var(--color-foreground)", marginBottom: "6px" }}>KnowledgeAI</h1>
             <p style={{ fontSize: "14px", color: "var(--color-muted)" }}>
               {translate(lang, "Персональный AI-ассистент")}

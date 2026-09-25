@@ -3,7 +3,7 @@
 import { Suspense, useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
-import { Brain, ArrowLeft, Upload, Trash2, MessageSquare, CheckCircle, XCircle, X, Plus, Loader2, HelpCircle } from "lucide-react";
+import { ArrowLeft, Upload, Trash2, MessageSquare, CheckCircle, XCircle, X, Plus, Loader2, HelpCircle } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LangToggle } from "@/components/lang-toggle";
 import { useLang, type Lang } from "@/context/lang-context";
@@ -14,6 +14,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { extractText } from "@/lib/extract-text";
 import { useAccessGate } from "@/hooks/useAccessGate";
 import { Paywall } from "@/components/paywall";
+import { AppLogo } from "@/components/app-logo";
 
 const ACCEPTED = ".pdf,.docx,.doc,.txt,.md";
 const FORMAT_LABELS: Record<string, string> = { pdf: "PDF", docx: "Word", doc: "Word", txt: "TXT", md: "MD" };
@@ -494,9 +495,7 @@ function CollectionPageInner() {
             <Link href="/dashboard" style={{ width: "38px", height: "38px", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--color-card)", border: "1px solid var(--color-card-border)", color: "var(--color-muted)", textDecoration: "none", flexShrink: 0 }}>
               <ArrowLeft size={18} />
             </Link>
-            <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Brain size={14} color="white" />
-            </div>
+            <AppLogo size={30} radius={8} />
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <LangToggle />

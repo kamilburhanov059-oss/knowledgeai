@@ -10,6 +10,7 @@ import { useLang } from "@/context/lang-context";
 import { t } from "@/lib/i18n";
 import { translate } from "@/lib/translate";
 import { supabase } from "@/lib/supabase";
+import { AppLogo } from "@/components/app-logo";
 
 const featureIcons = [BookOpen, Brain, Globe, Shield, Zap, Sparkles];
 
@@ -43,9 +44,7 @@ export default function LandingPage() {
       <nav style={{ position: "sticky", top: 0, zIndex: 100, borderBottom: "1px solid var(--color-card-border)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", background: "color-mix(in srgb, var(--color-background) 88%, transparent)" }}>
         <div className="nav-inner">
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <div style={{ width: "34px", height: "34px", borderRadius: "10px", background: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <Brain size={18} color="white" />
-            </div>
+            <AppLogo size={34} radius={10} />
             <span style={{ fontWeight: 700, fontSize: "18px", color: "var(--color-foreground)" }}>KnowledgeAI</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -181,9 +180,7 @@ export default function LandingPage() {
       <footer style={{ borderTop: "1px solid var(--color-card-border)", position: "relative", zIndex: 1 }}>
         <div style={{ maxWidth: "1152px", margin: "0 auto", padding: "28px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <div style={{ width: "22px", height: "22px", borderRadius: "6px", background: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Brain size={11} color="white" />
-            </div>
+            <AppLogo size={22} radius={6} />
             <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-muted)" }}>KnowledgeAI</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>

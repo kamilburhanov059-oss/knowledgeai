@@ -3,7 +3,7 @@
 import { Suspense, useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { Brain, ArrowLeft, Send, ChevronRight, Sparkles, Copy, FileText, RotateCcw } from "lucide-react";
+import { ArrowLeft, Send, ChevronRight, Sparkles, Copy, FileText, RotateCcw } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LangToggle } from "@/components/lang-toggle";
@@ -14,6 +14,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { useAccessGate } from "@/hooks/useAccessGate";
 import { Paywall } from "@/components/paywall";
+import { AppLogo } from "@/components/app-logo";
 
 interface Source { book: string; excerpt: string; page?: number | null; }
 interface Message { id: string; role: "user" | "assistant"; content: string; sources?: Source[]; }
@@ -225,9 +226,7 @@ function ChatPageInner() {
               </div>
             ) : (
               <div style={{ display: "flex", gap: "10px" }}>
-                <div style={{ width: "32px", height: "32px", borderRadius: "10px", background: "var(--color-primary-light)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: "2px" }}>
-                  <Brain size={16} style={{ color: "var(--color-primary)" }} />
-                </div>
+                <AppLogo size={32} radius={10} margin="2px 0 0 0" />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ padding: "12px 16px", borderRadius: "18px", borderTopLeftRadius: "4px", background: "var(--color-card)", border: "1px solid var(--color-card-border)", fontSize: "14px", lineHeight: 1.6, color: "var(--color-foreground)" }} className="md-content">
                     <ReactMarkdown>{msg.content}</ReactMarkdown>
@@ -249,9 +248,7 @@ function ChatPageInner() {
 
         {loading && (
           <div style={{ display: "flex", gap: "10px" }}>
-            <div style={{ width: "32px", height: "32px", borderRadius: "10px", background: "var(--color-primary-light)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <Brain size={16} style={{ color: "var(--color-primary)" }} />
-            </div>
+            <AppLogo size={32} radius={10} />
             <div style={{ padding: "14px 16px", borderRadius: "18px", borderTopLeftRadius: "4px", background: "var(--color-card)", border: "1px solid var(--color-card-border)" }}>
               <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
                 {[0, 1, 2].map((i) => (

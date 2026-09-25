@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { Brain } from "lucide-react";
+import { AppLogo } from "@/components/app-logo";
 
 export default function UpdatePasswordPage() {
   const [password, setPassword] = useState("");
@@ -46,9 +46,7 @@ export default function UpdatePasswordPage() {
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--color-background)", padding: "24px" }}>
       <div style={{ width: "100%", maxWidth: "400px" }}>
         <div style={{ textAlign: "center", marginBottom: "32px" }}>
-          <div style={{ width: "56px", height: "56px", borderRadius: "16px", background: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-            <Brain size={28} color="white" />
-          </div>
+          <AppLogo size={56} radius={16} margin="0 auto 16px" />
           <h1 style={{ fontSize: "22px", fontWeight: 700, color: "var(--color-foreground)" }}>Новый пароль</h1>
           <p style={{ fontSize: "14px", color: "var(--color-muted)", marginTop: "6px" }}>Введите новый пароль для вашего аккаунта</p>
         </div>

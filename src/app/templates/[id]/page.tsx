@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Brain, Send, Loader2, Download, CheckCircle, XCircle, Clock } from "lucide-react";
+import { ArrowLeft, Send, Loader2, Download, CheckCircle, XCircle, Clock } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LangToggle } from "@/components/lang-toggle";
 import { useLang } from "@/context/lang-context";
@@ -11,6 +11,7 @@ import { t } from "@/lib/i18n";
 import { translate, formatSkippedWarning } from "@/lib/translate";
 import { supabase, type KaiTemplate, type KaiTemplateGeneration } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
+import { AppLogo } from "@/components/app-logo";
 
 export default function TemplateDetailPage() {
   const params = useParams();
@@ -127,9 +128,7 @@ export default function TemplateDetailPage() {
               <ArrowLeft size={18} />
             </Link>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <div style={{ width: "34px", height: "34px", borderRadius: "10px", background: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <Brain size={18} color="white" />
-              </div>
+              <AppLogo size={34} radius={10} />
               <span style={{ fontWeight: 700, fontSize: "16px", color: "var(--color-foreground)" }}>{template.name}</span>
             </div>
           </div>

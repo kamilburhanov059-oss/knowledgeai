@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Brain, Plus, Search, MoreVertical, MessageSquare, BookOpen, Trash2, X, TrendingUp, FileText, Sparkles } from "lucide-react";
+import { Plus, Search, MoreVertical, MessageSquare, BookOpen, Trash2, X, TrendingUp, FileText, Sparkles } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LangToggle } from "@/components/lang-toggle";
 import { OnboardingTutorial } from "@/components/onboarding-tutorial";
@@ -15,6 +15,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { isSubscriptionActive } from "@/lib/limits";
 import { useIsTwa } from "@/hooks/useIsTwa";
 import { useAccessGate } from "@/hooks/useAccessGate";
+import { AppLogo } from "@/components/app-logo";
 
 const EMOJIS = ["📚", "📐", "⚖️", "🧬", "💻", "🎭", "🌍", "🔬", "📊", "🏛️", "🧠", "✈️"];
 
@@ -192,9 +193,7 @@ export default function DashboardPage() {
       <nav style={{ position: "sticky", top: 0, zIndex: 100, borderBottom: "1px solid var(--color-card-border)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", background: "color-mix(in srgb, var(--color-background) 88%, transparent)" }}>
         <div className="nav-inner">
           <Link href="/" style={{ display: "flex", alignItems: "center", gap: "10px", textDecoration: "none" }}>
-            <div style={{ width: "34px", height: "34px", borderRadius: "10px", background: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Brain size={18} color="white" />
-            </div>
+            <AppLogo size={34} radius={10} />
             <span style={{ fontWeight: 700, fontSize: "18px", color: "var(--color-foreground)" }}>KnowledgeAI</span>
           </Link>
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>

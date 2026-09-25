@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Brain } from "lucide-react";
+import { ArrowLeft} from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { AppLogo } from "@/components/app-logo";
 
 export default function DeleteAccountPage() {
   return (
@@ -13,9 +14,7 @@ export default function DeleteAccountPage() {
             <Link href="/" style={{ width: "38px", height: "38px", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--color-card)", border: "1px solid var(--color-card-border)", color: "var(--color-muted)", textDecoration: "none", flexShrink: 0 }}>
               <ArrowLeft size={18} />
             </Link>
-            <div style={{ width: "32px", height: "32px", borderRadius: "10px", background: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Brain size={16} color="white" />
-            </div>
+            <AppLogo size={32} radius={10} />
             <span style={{ fontWeight: 700, fontSize: "15px", color: "var(--color-foreground)" }}>KnowledgeAI</span>
           </div>
           <ThemeToggle />
