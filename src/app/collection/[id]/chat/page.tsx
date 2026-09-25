@@ -3,11 +3,11 @@
 import { Suspense, useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { ArrowLeft, Send, ChevronRight, Sparkles, Copy, FileText, RotateCcw } from "lucide-react";
+import { ArrowLeft, Send, ChevronRight, Sparkles, Copy, FileText, RotateCcw, Flag } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LangToggle } from "@/components/lang-toggle";
-import { useLang } from "@/context/lang-context";
+import { useLang, type Lang } from "@/context/lang-context";
 import { t } from "@/lib/i18n";
 import { translate } from "@/lib/translate";
 import { supabase } from "@/lib/supabase";
@@ -44,6 +44,56 @@ function SourceCard({ source }: { source: Source }) {
         </div>
       )}
     </div>
+  );
+}
+
+const REPORT_REASONS = [
+  { value: "offensive", label: "Оскорбительный или неприемлемый" },
+  { value: "incorrect", label: "Неверная информация" },
+  { value: "dangerous", label: "Опасный контент" },
+  { value: "other", label: "Другое" },
+] as const;
+
+const smallButton: React.CSSProperties = { padding: "4px 8px", borderRadius: "8px", background: "none", color: "var(--color-muted)", fontSize: "12px", gap: "4px" };
+
+function ReportButton({ answer, question, collectionId, lang }: { answer: string; question: string | null; collectionId: string; lang: Lang }) {
+  const [open, setOpen] = useState(false);
+  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+
+  const submit = async (reason: (typeof REPORT_REASONS)[number]["value"]) => {
+    setStatus("sending");
+    const { error } = await supabase.from("kai_ai_reports").insert({ collection_id: collectionId, question, answer, reason });
+    setStatus(error ? "error" : "sent");
+    if (!error) setOpen(false);
+  };
+
+  if (status === "sent") {
+    return <span style={{ ...smallButton, display: "inline-flex", color: "#10b981" }}>{translate(lang, "Спасибо! Жалоба отправлена")}</span>;
+  }
+
+  return (
+    <>
+      <button onClick={() => setOpen(!open)} className="btn-icon" style={smallButton}>
+        <Flag size={11} /> {translate(lang, "Пожаловаться")}
+      </button>
+      {open && (
+        <div style={{ flexBasis: "100%", marginTop: "4px", padding: "10px 12px", borderRadius: "12px", background: "var(--color-card)", border: "1px solid var(--color-card-border)" }}>
+          <p style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-foreground)", marginBottom: "8px" }}>{translate(lang, "Что не так с ответом?")}</p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+            {REPORT_REASONS.map((r) => (
+              <button key={r.value} disabled={status === "sending"} onClick={() => submit(r.value)}
+                style={{ padding: "6px 10px", borderRadius: "8px", fontSize: "12px", fontWeight: 600, border: "1px solid var(--color-card-border)", background: "var(--color-background)", color: "var(--color-foreground)", cursor: "pointer", opacity: status === "sending" ? 0.6 : 1 }}>
+                {translate(lang, r.label)}
+              </button>
+            ))}
+            <button onClick={() => { setOpen(false); setStatus("idle"); }} style={{ padding: "6px 10px", borderRadius: "8px", fontSize: "12px", border: "none", background: "none", color: "var(--color-muted)", cursor: "pointer" }}>
+              {translate(lang, "Отмена")}
+            </button>
+          </div>
+          {status === "error" && <p style={{ fontSize: "12px", color: "#ef4444", marginTop: "8px" }}>{translate(lang, "Не удалось отправить жалобу")}</p>}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -216,7 +266,7 @@ function ChatPageInner() {
 
       {/* Сообщения */}
       <div style={{ flex: 1, overflowY: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "16px" }}>
-        {messages.map((msg) => (
+        {messages.map((msg, idx) => (
           <div key={msg.id}>
             {msg.role === "user" ? (
               <div style={{ display: "flex", justifyContent: "flex-end" }}>
@@ -237,9 +287,19 @@ function ChatPageInner() {
                       {msg.sources.map((s, i) => <SourceCard key={i} source={s} />)}
                     </div>
                   )}
-                  <button onClick={() => navigator.clipboard?.writeText(msg.content)} className="btn-icon" style={{ marginTop: "6px", padding: "4px 8px", borderRadius: "8px", background: "none", color: "var(--color-muted)", fontSize: "12px", gap: "4px" }}>
-                    <Copy size={11} /> {TC.copy}
-                  </button>
+                  <div style={{ marginTop: "6px", display: "flex", flexWrap: "wrap", alignItems: "center" }}>
+                    <button onClick={() => navigator.clipboard?.writeText(msg.content)} className="btn-icon" style={smallButton}>
+                      <Copy size={11} /> {TC.copy}
+                    </button>
+                    {msg.id !== "welcome" && (
+                      <ReportButton
+                        answer={msg.content}
+                        question={messages[idx - 1]?.role === "user" ? messages[idx - 1].content : null}
+                        collectionId={collection.id}
+                        lang={lang}
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
             )}
