@@ -95,6 +95,10 @@ export default function BillingPage() {
       if (!res.ok) throw new Error(body.error || "Ошибка сервера");
       await loadSub();
     } catch (err) {
+      if (err instanceof Error && err.message === "CANCELED") {
+        setCheckingOut(false);
+        return;
+      }
       setError(err instanceof Error ? err.message : "Неизвестная ошибка");
     } finally {
       setCheckingOut(false);
